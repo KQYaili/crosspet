@@ -56,6 +56,7 @@ extension App {
     @objc func pat() { js("handleClick('pat')") }
     @objc func poke() { js("handleClick('poke')") }
     @objc func egg() { js("playEgg(true)") }
+    @objc func askReset() { js("askReset()") }
 
     @objc func switchCharacter(_ item: NSMenuItem) {
         guard let value = item.representedObject as? String else { return }

@@ -141,7 +141,9 @@ const WHEN = {
   idle: '平时', listening: '收到你的消息', thinking: '思考', reading: '读文件、搜代码', writing: '写文件、改代码', running: '跑命令',
   searching: '上网查资料', delegating: '派子任务', drawing: '画图', happy: '一轮完成', proud: '一轮用了 8 次以上工具的大活完成',
   oops: '出错', surprised: '被打断 / 被戳', pat: '被摸头', sleeping: '10 分钟没动静', tired: '额度快用完', hum: '闲着时哼歌',
-  stretch: '闲着时伸懒腰', yawn: '闲着时打哈欠', compact: '压缩上下文', asking: 'AI 问你问题 / 等你授权', update: '有新版本', reset: 'Codex 额度提前重置', feast: '余额增加（充值）',
+  stretch: '闲着时伸懒腰', yawn: '闲着时打哈欠', compact: '压缩上下文', asking: 'AI 问你问题 / 等你授权', update: '有新版本', reset: 'Codex 额度提前重置',
+  reset_check: '重置提醒：被问「会重置吗？」时先查一下', reset_bell: '重置提醒：官方已宣布要重置', reset_hope: '重置提醒：预测 ≥70%',
+  reset_maybe: '重置提醒：预测 30–69%', reset_nope: '重置提醒：预测更低 / 没风声 / 连不上', feast: '余额增加（充值）',
   sorry: '出错 / 被打断后你又发消息', pop: '彩蛋：跳出来', pretend: '彩蛋：装模作样（等你点她）', caught: '彩蛋：被识破', bye: '彩蛋：溜走',
   escape: '彩蛋：没人点、自己走掉（可选，没画用 bye）',
   greet_morning: '早上（5–11 点）第一次见面', greet_noon: '中午（11–14 点）第一次见面', greet_afternoon: '下午（14–18 点）第一次见面',
@@ -315,6 +317,19 @@ const SCENES = [
     run: async (id) => { const s = await petStatus(), saved = s.quota[id] ?? null, now = Date.now() / 1000
       const q = u => ({ text: `测试 本周 剩余 ${100 - u}%`, low: false, windows: [{ label: '本周', used: u, reset: now + 400000 }] })
       pet(`setQuota('gpt', ${J(q(70))})`); await wait(500); pet(`setQuota('gpt', ${J(q(3))})`); await wait(8000); pet(`setQuota('gpt', ${J(saved)})`) } },
+  { id: 'resets', name: 'Codex 重置提醒（6 档）', only: (c, id) => id === 'gpt', exp: '不联网，用假数据依次问她「会重置吗？」：先<b>查手机</b>，再按档回答——<b>官方已宣布</b>（摇铃，额度下方多一行「🔔 官方已宣布重置」）→ <b>85%</b>（期待）→ <b>50%</b>（半信半疑）→ <b>10%</b>（摇头）→ <b>没风声</b>（摇头，说上次是几天前）→ <b>连不上</b>（摇头）。每档约 10 秒，演完恢复真实设置',
+    run: async (id, prog) => {
+      const iso = ms => new Date(Date.now() + ms).toISOString()
+      const src = { type: 'x_post', author: 'thsottiaux', url: 'https://x.com' }
+      const watch = chance => ({ level: chance >= 70 ? 'strong' : 'elevated', reset_chance_percent: chance, forecast_window: 'next 48h', observed_at: iso(-3600e3), expires_at: iso(86400e3), text: '', source: src })
+      const data = (extra = {}) => ({ data: { latest_reset: null, scheduled_reset: null, active_watch: null, stats: { total: 61, last_reset_at: iso(-1.4 * 86400e3), days_since_last: 1.4, avg_interval_days: 6.5 }, ...extra }, meta: { api_version: 'v1' } })
+      const tiers = [
+        ['官方已宣布', data({ scheduled_reset: { id: 'dev', status: 'scheduled', reset_type: 'regular', announced_at: iso(-600e3), scheduled_for: iso(20 * 3600e3), text: '', source: src } })],
+        ['85%', data({ active_watch: watch(85) })], ['50%', data({ active_watch: watch(50) })], ['10%', data({ active_watch: watch(10) })],
+        ['没风声', data()], ['连不上', null],
+      ]
+      for (const [name, d] of tiers) { prog(name); pet(`devResetsPlay(${J(d)})`); await wait(10500) }
+      pet('devResetsDone()'); prog('') } },
   { id: 'feast', name: 'DeepSeek 充值', only: (c, id) => id === 'deepseek', exp: '余额变多 → <b>feast</b>：抱着比脑袋还大的饭碗开吃 + 彩纸；之后恢复真实余额',
     run: async (id) => { const s = await petStatus(), saved = s.quota[id] ?? null
       pet(`setQuota('deepseek', ${J({ text: '余额 ¥6.00', low: false, balance: 6 })})`); await wait(500)

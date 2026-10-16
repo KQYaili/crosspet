@@ -79,7 +79,15 @@ namespace CrossPet
                 SavePosition();
                 if (!shook) CheckDock();   // 甩她的时候松手不贴边
             };
-            hit.MouseLeftButtonUp += (_, __) => { hit.ReleaseMouseCapture(); if (pressed) { pressed = false; Js("handleClick('pat')"); } };
+            hit.MouseLeftButtonUp += (_, e) =>
+            {
+                hit.ReleaseMouseCapture();
+                if (!pressed) return;
+                pressed = false;
+                // 点的位置换成网页坐标（CSS 像素：DIP 除以给网页的缩放）：网页要知道是不是点在「新功能」卡片的按钮上
+                var p = e.GetPosition(hit); var z = Math.Max(web?.ZoomFactor ?? 1, 0.01);
+                Js($"handleClick('pat', {Num(Math.Round(p.X / z, 1))}, {Num(Math.Round(p.Y / z, 1))})");
+            };
             hit.MouseRightButtonUp += (_, __) =>
             {
                 var menu = new Forms.ContextMenuStrip();

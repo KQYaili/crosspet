@@ -191,10 +191,74 @@ if character == "--ensure":
     ensure_pet_logged("--ensure")
     sys.exit(0)
 
+IDLE_SECONDS = 1.5      # 这么久没有新数据进来就不等了（宿主都是一口气写完的）
+MAX_SECONDS = 15        # 最多读这么久
+MAX_BYTES = 64 << 20    # 最多读这么多（Claude Code 的 PostToolUse 带着工具输出，可能有好几 MB）
+
+
+def read_chunk(fd: int, timeout: float):
+    """读一块：有数据返回 bytes，输入关了返回 b""，等了 timeout 还没数据返回 None"""
+    if os.name == "nt":
+        # Windows 的管道不能 select：先看管道里有没有数据（PeekNamedPipe），有了再读，读就不会卡住
+        import ctypes
+        import msvcrt
+        from ctypes import wintypes
+        try:
+            handle = msvcrt.get_osfhandle(fd)
+        except OSError:
+            return b""
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        avail = wintypes.DWORD()
+        end = time.monotonic() + timeout
+        while True:
+            if not k32.PeekNamedPipe(wintypes.HANDLE(handle), None, 0, None, ctypes.byref(avail), None):
+                if ctypes.get_last_error() == 109:   # ERROR_BROKEN_PIPE：写的那头关了
+                    return b""
+                return os.read(fd, 1 << 16)       # 不是管道（重定向的文件）：直接读，读到头就是 EOF
+            if avail.value:
+                return os.read(fd, min(avail.value, 1 << 16))
+            if time.monotonic() >= end:
+                return None
+            time.sleep(0.01)
+    import select
+    ready, _, _ = select.select([fd], [], [], timeout)
+    return os.read(fd, 1 << 16) if ready else None
+
+
+def read_event():
+    """从 stdin 读一个事件 JSON。读到一个完整的就返回，不等输入关闭（#19：Windows 上 Codex 的 app-server
+    写完事件不关输入，以前在这里一直等，钩子进程挂着不退，每次留下一个空白终端）。
+    没有输入（交互终端）、超时、内容不是 JSON 时返回 None"""
+    if sys.stdin is None or sys.stdin.isatty():
+        return None
+    fd = sys.stdin.fileno()
+    buf = b""
+    start = time.monotonic()
+    decoder = json.JSONDecoder()
+    while len(buf) < MAX_BYTES and time.monotonic() - start < MAX_SECONDS:
+        chunk = read_chunk(fd, IDLE_SECONDS)
+        if not chunk:   # 输入关了（b""）或一阵子没数据（None）：拿读到的试最后一次
+            break
+        buf += chunk
+        if buf.rstrip()[-1:] != b"}":   # 还没到对象的结尾：接着读（不每块都解析，几 MB 的事件也不慢）
+            continue
+        try:
+            # 严格按 UTF-8 解：汉字被切在两块之间时先接着读，凑齐了再解
+            return decoder.raw_decode(buf.decode("utf-8").lstrip())[0]
+        except (ValueError, UnicodeDecodeError):
+            continue
+    try:
+        # 按 UTF-8 读：Windows 上 Python 默认用系统编码（中文系统是 GBK），事件里一有中文就会解码失败
+        return json.loads(buf.decode("utf-8", errors="replace"))
+    except ValueError:
+        return None
+
+
 try:
-    # 按 UTF-8 读：Windows 上 Python 默认用系统编码（中文系统是 GBK），事件里一有中文就会解码失败
-    event = json.loads(sys.stdin.buffer.read().decode("utf-8", errors="replace"))
+    event = read_event()
 except Exception:
+    event = None
+if not isinstance(event, dict):
     sys.exit(0)
 
 # 心跳：「最近一次收到这个 AI 的消息」，桌宠记下来，设置里能看出「接上了但从没收到过消息」，反馈里也带着。

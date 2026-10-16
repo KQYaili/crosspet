@@ -13,6 +13,7 @@ extension App {
     var dsQuotaEnabled: Bool { defaults.object(forKey: "dsQuota") as? Bool ?? true }
     /// 额度合并显示（默认关）：小窗把各家 AI 的额度排成几行，而不是只显示当前角色的。怎么排在网页里（quota-aggregate.js）
     var quotaAggregate: Bool { defaults.bool(forKey: "quotaAggregate") }
+    var codexResets: Bool { defaults.bool(forKey: "codexResets") }   // Codex 重置提醒（默认关，数据来自 codex-resets.com）
     /// 省电模式（默认关）：特效每秒 15 帧、闲着 10 秒就停（平时 30 帧、30 秒）
     var powerSave: Bool { defaults.bool(forKey: "powerSave") }
     // 看不见的时候（窗口被完全挡住、锁屏、屏幕休眠）让网页把动画全停了

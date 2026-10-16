@@ -104,8 +104,21 @@ namespace CrossPet
                     if (Store.Json.DeserializeObject(e.WebMessageAsJson) is Dictionary<string, object> msg)
                         try { pet.HandleSettings(msg); } catch (Exception ex) { Store.Log("设置出错: " + ex); }
                 };
+                web.CoreWebView2.NavigationCompleted += (_, __) =>
+                {
+                    loaded = true;
+                    if (pendingTab != null) { var t = pendingTab; pendingTab = null; ShowTab(t); }
+                };
                 web.CoreWebView2.Navigate(Store.PageUrl("settings.html"));
             };
+        }
+
+        bool loaded; string pendingTab;
+        /// <summary>切到某个标签页（「新功能」卡片的「去看看」）；页面还没加载完就等加载完再切</summary>
+        public void ShowTab(string tab)
+        {
+            if (!loaded || web.CoreWebView2 == null) { pendingTab = tab; return; }
+            try { web.CoreWebView2.ExecuteScriptAsync($"showTab({Store.Json.Serialize(tab)})"); } catch { }
         }
 
         public void Show() { window.Show(); window.Activate(); }

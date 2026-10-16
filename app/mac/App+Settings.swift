@@ -94,12 +94,22 @@ extension App {
         }
     }
 
-    @objc func openSettings() {
+    @objc func openSettings() { openSettingsAt(tab: nil) }
+
+    /// 桌宠页面发来的消息：「新功能」卡片点了「去看看」→ 打开设置停在「新功能」页
+    func handlePet(_ body: Any) {
+        if let d = body as? [String: Any], let tab = d["openSettings"] as? String { openSettingsAt(tab: tab) }
+    }
+
+    /// tab：打开后停在哪个标签页（nil = 上次看的那页）；窗口已经开着就切过去
+    func openSettingsAt(tab: String?) {
         if let w = settingsWindow {
+            if let tab { settingsWeb?.evaluateJavaScript("showTab(\(quote(tab)))", completionHandler: nil) }
             NSApp.activate(ignoringOtherApps: true)
             w.makeKeyAndOrderFront(nil)
             return
         }
+        pendingSettingsTab = tab
         let config = WKWebViewConfiguration()
         config.userContentController.add(DevBridge(app: self, kind: .settings), name: "settings")
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 680),
@@ -125,11 +135,11 @@ extension App {
     func settingsState() -> [String: Any] {
         let names = defaults.dictionary(forKey: "names") as? [String: String] ?? [:]
         var state: [String: Any] = [
-            "version": currentVersion, "platform": "mac",
+            "version": currentVersion, "appVersion": currentVersion, "whatsNewSeen": defaults.string(forKey: "whatsNewSeen") ?? currentVersion, "platform": "mac",
             "size": Double(petScale), "textSize": textScale, "textLinked": textLinked, "showName": showName, "eggs": eggsEnabled, "hideFullscreen": hideInFullscreen, "aura": auraMode, "followApps": followApps,
             "gptQuota": defaults.bool(forKey: "gptQuota"), "agyQuota": defaults.bool(forKey: "agyQuota"), "gptQuotaNote": codexNote,
             "login": SMAppService.mainApp.status == .enabled,
-            "edgeDock": edgeDockEnabled, "dsQuota": dsQuotaEnabled, "quotaAggregate": quotaAggregate, "powerSave": powerSave,
+            "edgeDock": edgeDockEnabled, "dsQuota": dsQuotaEnabled, "quotaAggregate": quotaAggregate, "codexResets": codexResets, "powerSave": powerSave,
             "hideHotkey": hideHotkey, "hotkeyFailed": hotkeyFailed, "hotkeys": [["id": "off", "label": "不用快捷键"]] + Self.hotkeyChoices.map { ["id": $0.id, "label": $0.label] },
             "aiAutostart": aiAutostart,
             "character": currentId ?? characterIds.first ?? "",

@@ -197,6 +197,11 @@ extension App {
             case "quotaAggregate":
                 let on = value as? Bool ?? false
                 defaults.set(on, forKey: "quotaAggregate"); js("setQuotaAggregate(\(on))")
+            case "whatsNewSeen":   // 打开了「新功能」页：记为看过，小红点消失
+                if let v = value as? String { defaults.set(v, forKey: "whatsNewSeen") }
+            case "codexResets":
+                let on = value as? Bool ?? false
+                defaults.set(on, forKey: "codexResets"); js("setCodexResets(\(on))")
             case "dsQuota":
                 let on = value as? Bool ?? true
                 defaults.set(on, forKey: "dsQuota")
@@ -236,7 +241,9 @@ extension App {
             case "update": selfUpdate()
             case "checkUpdate": checkForUpdate(manual: true)
             case "openCharacters": openCharacters()
+            case "openCodexResets": NSWorkspace.shared.open(URL(string: "https://codex-resets.com")!)
             case "openData": NSWorkspace.shared.open(root)
+            case "openReleases": NSWorkspace.shared.open(URL(string: "https://github.com/lokicorvus/crosspet/releases")!)
             case "devConsole": openDevConsole()
             case "feedback": openFeedback()
             default: break

@@ -84,9 +84,12 @@ extension App {
         devJS("boot(\(arg))")
         // 刚更新完（上次打开的是别的版本）：让她说一声
         let last = defaults.string(forKey: "lastVersion")
+        // 「新功能」页看到哪一版了（设置里的小红点用）：没记过时，老用户按上次的版本算（有没看过的就亮），新安装按当前版本（不亮）。要在下面改掉 lastVersion 之前记
+        if defaults.string(forKey: "whatsNewSeen") == nil { defaults.set(last ?? currentVersion, forKey: "whatsNewSeen") }
         if last != currentVersion {
             defaults.set(currentVersion, forKey: "lastVersion")
-            if last != nil, isNewer(currentVersion, than: last!) { js("justUpdated(\(quote("v" + currentVersion)))") }
+            // 带上上次的版本：这版（跳过的几版合在一起）有新功能就弹「新功能」卡片（见 whats-new.js）
+            if last != nil, isNewer(currentVersion, than: last!) { js("justUpdated(\(quote("v" + currentVersion)), \(quote(last!)))") }
         }
     }
 

@@ -23,6 +23,7 @@ extension App {
         add(menu, "摸摸头", #selector(pat))
         add(menu, "戳一下", #selector(poke))
         add(menu, "召唤彩蛋", #selector(egg))
+        if codexResets && currentId == "gpt" { add(menu, "会重置吗？", #selector(askReset)) }   // 只有 GPT 有这个需求
         if characterIds.count > 1 {
             menu.addItem(.separator())
             let switchItem = NSMenuItem(title: "换角色", action: nil, keyEquivalent: "")

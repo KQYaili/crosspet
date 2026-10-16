@@ -168,14 +168,17 @@ namespace CrossPet
                     ready = false;
                     if (!a.IsSuccess) { Store.Log("桌宠页面加载失败: " + a.WebErrorStatus); return; }
                     LoadCharacters();
-                    await core.ExecuteScriptAsync($"init({ManifestJson}); setCharacter({Q(current)}, true); setAuraMode({Q(AuraMode)}); setShowName({(ShowName ? "true" : "false")}); setEggsEnabled({(EggsEnabled ? "true" : "false")}); setPowerSave({(PowerSave ? "true" : "false")}); setQuotaAggregate({(QuotaAggregate ? "true" : "false")})");
+                    await core.ExecuteScriptAsync($"init({ManifestJson}); setCharacter({Q(current)}, true); setAuraMode({Q(AuraMode)}); setShowName({(ShowName ? "true" : "false")}); setEggsEnabled({(EggsEnabled ? "true" : "false")}); setPowerSave({(PowerSave ? "true" : "false")}); setQuotaAggregate({(QuotaAggregate ? "true" : "false")}); setCodexResets({(CodexResets ? "true" : "false")})");
                     if (Store.Settings.TryGetValue("dock", out var dk) && dk is string side && EdgeDockEnabled) After(1500, () => SetDock(side));   // 上次是贴着边的
                     // 刚更新完（上次打开的是别的版本）：让她说一声
                     var last = Store.Settings.TryGetValue("lastVersion", out var lv) ? lv as string : null;
+                    // 「新功能」页看到哪一版了（设置里的小红点用）：没记过时，老用户按上次的版本算（有没看过的就亮），新安装按当前版本（不亮）。要在下面改掉 lastVersion 之前记
+                    if (!(Store.Settings.TryGetValue("whatsNewSeen", out var wn) && wn is string)) { Store.Settings["whatsNewSeen"] = last ?? Store.Version; Store.SaveSettings(); }
                     if (last != Store.Version)
                     {
                         Store.Settings["lastVersion"] = Store.Version; Store.SaveSettings();
-                        if (last != null && Newer(Store.Version, last)) Js($"justUpdated({Q("v" + Store.Version)})");
+                        // 带上上次的版本：这版（跳过的几版合在一起）有新功能就弹「新功能」卡片（见 whats-new.js）
+                        if (last != null && Newer(Store.Version, last)) Js($"justUpdated({Q("v" + Store.Version)}, {Q(last)})");
                     }
                     ready = true;
                     ApplySizes(anchor: Anchor.Corner);   // 解锁过文字大小的：按画布重设窗口，左上角不动（锁着的尺寸不变）
@@ -192,7 +195,10 @@ namespace CrossPet
                 {
                     try
                     {
-                        if (imageErrors >= 5 || !(Store.Json.DeserializeObject(a.WebMessageAsJson) is Dictionary<string, object> m) || !m.TryGetValue("imageError", out var src)) return;
+                        if (!(Store.Json.DeserializeObject(a.WebMessageAsJson) is Dictionary<string, object> m)) return;
+                        // 「新功能」卡片点了「去看看」：打开设置停在「新功能」页
+                        if (m.TryGetValue("openSettings", out var tab) && tab is string t) { OpenSettings(t); return; }
+                        if (imageErrors >= 5 || !m.TryGetValue("imageError", out var src)) return;
                         imageErrors++;
                         Store.Log($"立绘加载失败: {src}");
                     }

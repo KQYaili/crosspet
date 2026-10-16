@@ -28,6 +28,7 @@ final class App: NSObject, NSApplicationDelegate, WKNavigationDelegate {
     var devWeb: WKWebView?
     var settingsWindow: NSWindow?
     var settingsWeb: WKWebView?
+    var pendingSettingsTab: String?   // 设置窗口加载完后切到哪个标签页（从「新功能」卡片打开时是 news）
     var feedbackWindow: NSWindow?
     var feedbackWeb: WKWebView?
     var defaultNames: [String: String] = [:]   // id → character.json 里的原名（设置页显示占位用）
@@ -137,7 +138,9 @@ final class App: NSObject, NSApplicationDelegate, WKNavigationDelegate {
         applyFullscreenBehavior()
 
         let container = NSView(frame: NSRect(origin: .zero, size: size))
-        web = WKWebView(frame: container.bounds, configuration: WKWebViewConfiguration())
+        let petConfig = WKWebViewConfiguration()
+        petConfig.userContentController.add(DevBridge(app: self, kind: .pet), name: "pet")   // 桌宠页面 → App（「新功能」卡片的「去看看」）
+        web = WKWebView(frame: container.bounds, configuration: petConfig)
         web.setValue(false, forKey: "drawsBackground")
         web.autoresizingMask = [.width, .height]
         web.navigationDelegate = self
@@ -147,7 +150,12 @@ final class App: NSObject, NSApplicationDelegate, WKNavigationDelegate {
 
         let drag = DragView(frame: container.bounds)
         drag.autoresizingMask = [.width, .height]
-        drag.onClick = { [weak self] in self?.js("handleClick('pat')") }
+        // 点的位置换成网页坐标（CSS 像素：除掉人物大小的缩放，y 轴翻过来）
+        drag.onClick = { [weak self, weak drag] p in
+            guard let self, let drag else { return }
+            let z = max(self.web.pageZoom, 0.01)
+            self.js(String(format: "handleClick('pat', %.1f, %.1f)", p.x / z, (drag.bounds.height - p.y) / z))
+        }
         drag.onMenu = { [weak self] e in self?.showMenu(e, in: drag) }
         drag.onDragStart = { [weak self] in self?.undock() }
         drag.onDragEnd = { [weak self] in self?.checkDock() }

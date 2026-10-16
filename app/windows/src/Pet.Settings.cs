@@ -160,10 +160,12 @@ namespace CrossPet
             scaleTimer.Start();
         }
 
-        void OpenSettings()
+        /// <summary>tab：停在哪个标签页（null = 上次看的那页）；窗口已经开着就切过去</summary>
+        void OpenSettings(string tab = null)
         {
             if (settings == null) { settings = new SettingsWindow(this, env); settings.Closed += () => settings = null; }
             settings.Show();
+            if (tab != null) settings.ShowTab(tab);
         }
 
         List<string> integrated;   // 已接入的 AI（设置窗口打开时查一次，接入 / 撤销后再查）
