@@ -2,6 +2,7 @@
 
 ## 未发布
 
+- 新增：新角色**千问**（形象出自 B 站 ZipZipPipe）：温柔大方的富家千金，55 张立绘，拿扇子表达情绪；专属动作「请喝奶茶」（大活完成）、「掏金卡」（额度快用完）、「分小礼物」（闲着时）；切到千问桌面客户端（macOS）或用千问模型时换成她。新彩蛋：千问在场时，DeepSeek 把你交代的活偷偷外包给她、自己抱着枕头睡大觉
 - 新增：接入 Qwen Code（阿里）：钩子写进 `~/.qwen/settings.json`，和 WorkBuddy、ZCode、Hermes Agent 一样按当前模型换角色，**新开一个 Qwen Code 会话生效**。Qwen Code 的钩子格式跟 Claude Code 一样（不是它上游 Gemini CLI 那套），`timeout` 的单位是秒。额度不显示（不碰登录凭据）。用千问模型时换成新角色千问（感谢 @Jun-shisheng 贡献，#23）
 - 修复：宿主名和角色名同名的多模型宿主（Claude Code、Codex，以及新加的 Qwen Code）记模型时，和桌宠的多会话状态共用 `<名字>-sessions.json`，两种内容会互相覆盖——第二条事件把会话状态当模型名读，钩子直接抛 `AttributeError` 崩掉。现在这类宿主的模型另记 `<名字>-models.json`（感谢 @Jun-shisheng，#23）
 - 修复（Windows）：一键更新时如果接入的 AI（Codex、DeepSeek Harness……）正好在用 CrossPet 自带的 Python，安装会删到一半失败，之后桌宠每次启动都崩、打不开。现在新版先完整复制到旁边，再整个换过去，哪一步失败都退回旧版本，并弹窗说明没装上；安装前会等这些钩子跑完。万一安装目录已经缺东西，启动时会提示，找得到下载好的安装包就直接用它修复（感谢 @mkinnqijn 的排查和修复建议，#24）

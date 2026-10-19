@@ -4,6 +4,11 @@
 // 设计见 docs/superpowers/specs/2026-10-16-whats-new-design.md；测试 tests/whats_new.test.js
 ;(function (root) {
   const LIST = [
+    { version: '1.3.7', items: [
+      { icon: '🪭', title: '新角色：千问', text: '温柔大方的富家千金：大活干完请你喝奶茶，额度快用完时掏出金卡，闲着会分小礼物给大家。用千问模型时自动换成她，也可以在「角色」页手动选。', go: { tab: 'character' } },
+      { icon: '🔌', title: '接入 Qwen Code', text: '阿里的 Qwen Code 命令行也能接了：她会跟着干活做动作。在「接入 AI」页点一下 Qwen Code 就好，新开的会话生效。', go: { tab: 'ai' } },
+      { icon: '😴', title: '新彩蛋', text: '千问在场时偶尔会撞见：DeepSeek 把你交代的活偷偷外包给了千问，自己抱着枕头睡大觉。点她一下试试？' },
+    ] },
     { version: '1.3.6', items: [
       { icon: '🔔', title: 'Codex 重置提醒', text: '官方提前宣布要重置 Codex 额度时，GPT 的额度下方会多一行；右键「会重置吗？」可以问她，她会按预测的概率回答。默认关着，在「额度」页打开。', go: { tab: 'quota', key: 'codexResets' } },
       { icon: '📱', title: 'GPT 的新动作', text: '被问「会重置吗？」时她会查手机，再摇铃铛、期待、怀疑或者摇头。原版和降智龙崽各一套。' },
