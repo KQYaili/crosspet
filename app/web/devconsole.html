@@ -322,7 +322,7 @@ const SCENES = [
     run: async (id, prog) => {
       const iso = ms => new Date(Date.now() + ms).toISOString()
       const src = { type: 'x_post', author: 'thsottiaux', url: 'https://x.com' }
-      const watch = chance => ({ level: chance >= 70 ? 'strong' : 'elevated', reset_chance_percent: chance, forecast_window: 'next 48h', observed_at: iso(-3600e3), expires_at: iso(86400e3), text: '', source: src })
+      const watch = chance => ({ level: chance >= 70 ? 'strong' : 'elevated', reset_chance_percent: chance, forecast_window: 'within 24h', observed_at: iso(-3600e3), expires_at: iso(86400e3), text: '', source: src })
       const data = (extra = {}) => ({ data: { latest_reset: null, scheduled_reset: null, active_watch: null, stats: { total: 61, last_reset_at: iso(-1.4 * 86400e3), days_since_last: 1.4, avg_interval_days: 6.5 }, ...extra }, meta: { api_version: 'v1' } })
       const tiers = [
         ['官方已宣布', data({ scheduled_reset: { id: 'dev', status: 'scheduled', reset_type: 'regular', announced_at: iso(-600e3), scheduled_for: iso(20 * 3600e3), text: '', source: src } })],

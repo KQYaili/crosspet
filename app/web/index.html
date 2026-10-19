@@ -427,15 +427,9 @@ function resetsTold(add) {
   if (add) { list = [...list.filter(x => x !== add), add].slice(-50); try { localStorage.setItem('crosspet-resets-told', JSON.stringify(list)) } catch {} }
   return list
 }
-// 挑一句台词填空；没给概率时只挑不含 {chance} 的句子（都含就退回默认台词里不含的）
+// 挑一句台词填空：句子里用到的数据（概率、窗口……）这次没有，就只挑不含它的句子（角色的都不行就退回默认句，见 usableLines）
 function pickLine(key, vars) {
-  let list = linesOf(key) || ['']
-  if (!('chance' in vars)) {
-    const ok = list.filter(l => !l.includes('{chance}'))
-    list = ok.length ? ok : (CodexResets.LINES[key] || ['']).filter(l => !l.includes('{chance}'))
-    if (!list.length) list = ['']
-  }
-  return CodexResets.fill(pick(list), vars)
+  return CodexResets.fill(pick(CodexResets.usableLines(linesOf(key), key, vars)), vars)
 }
 // data：按哪份数据回答（null = 连不上那个网站）
 function tellReset(data = resetsData) {
