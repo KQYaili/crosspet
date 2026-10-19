@@ -7,6 +7,7 @@
     { version: '1.3.7', items: [
       { icon: '🪭', title: '新角色：千问', text: '温柔大方的富家千金：大活干完请你喝奶茶，额度快用完时掏出金卡，闲着会分小礼物给大家。用千问模型时自动换成她，也可以在「角色」页手动选。', go: { tab: 'character' } },
       { icon: '🔌', title: '接入 Qwen Code', text: '阿里的 Qwen Code 命令行也能接了：她会跟着干活做动作。在「接入 AI」页点一下 Qwen Code 就好，新开的会话生效。', go: { tab: 'ai' } },
+      { icon: '⏰', title: '峰谷时段', text: 'DeepSeek、GLM 的额度下面多了一条今天的时间条：红色高峰、绿色空闲，一眼看出现在贵不贵。还能选高峰、空闲各穿哪件衣服，到点她自己换。', go: { tab: 'quota', key: 'peakBar' } },
       { icon: '😴', title: '新彩蛋', text: '千问在场时偶尔会撞见：DeepSeek 把你交代的活偷偷外包给了千问，自己抱着枕头睡大觉。点她一下试试？' },
     ] },
     { version: '1.3.6', items: [
