@@ -502,7 +502,7 @@ function appendResetNotice(el) {
   const line = document.createElement('div')
   line.className = 'notice'
   line.textContent = t
-  if (el.className === 'agg') line.style.gridColumn = '1 / -1'   // 合并显示时是表格：这一行横跨整张表，放在最下面
+  if (el.classList.contains('agg')) line.style.gridColumn = '1 / -1'   // 合并显示时是表格：这一行横跨整张表，放在最下面
   el.appendChild(line)
 }
 // ---- 峰谷时段（peak-hours.js）：额度栏下面画今天的时间条；按时段换衣服见 checkPeakOutfits ----
@@ -528,7 +528,7 @@ function appendPeakBar(el) {
   for (const h of PeakHours.ticks(rule)) { const t = document.createElement('span'); t.textContent = h; t.style.left = pct(h * 60); ticks.appendChild(t) }
   box.title = rule.label
   box.append(wrap, ticks)
-  if (el.className === 'agg') box.style.gridColumn = '1 / -1'   // 合并显示时横跨整张表，放在最下面
+  if (el.classList.contains('agg')) box.style.gridColumn = '1 / -1'   // 合并显示时横跨整张表，放在最下面
   el.appendChild(box)
 }
 // 每分钟（对齐到整分）挪一次时间条上的竖线；按时段换衣服也在这里看
@@ -557,7 +557,8 @@ function setPeakSkins(map) {
   const startup = peakSkins === null
   peakSkins = map && typeof map === 'object' ? map : {}
   if (!startup) for (const id of Object.keys(PeakHours.RULES)) peakApplied(id, PeakHours.decide(PeakHours.RULES[id], peakNow(), null, null).key)
-  checkPeakOutfits(startup)
+  // 启动时等角色恢复好（setCharacter 要 0.33 秒才定下来）再看：太早发 wear，外壳重推 init 时网页以为还没有角色、换成了第一个
+  if (startup) setTimeout(() => checkPeakOutfits(true), 1500); else checkPeakOutfits()
 }
 function peakBusy() {
   return !!(egg || multi || updatingNow || farewellLine !== null || tucked || aiActivity() || !$('bubble').classList.contains('hide'))
