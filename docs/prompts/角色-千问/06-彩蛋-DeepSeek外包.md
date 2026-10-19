@@ -11,6 +11,7 @@
 名牌显示「DeepSeek」（她不是在冒充千问）。
 
 **附件两张，说明哪张是谁**：`docs/prompts/ref-deepseek.webp`（DeepSeek，女仆装原版）和 `docs/prompts/ref-qwen.webp`（千问）。
+**生图工具里开启 `transparent_background: true`**（真实透明背景、无地面阴影、保留完整边缘），不用白底。
 画好放进 `characters/egg-qwen/raw/`，文件名 `pop` / `pretend` / `caught` / `bye` / `escape`。
 （之前那版「千问戴 DeepSeek 头饰冒充」的 5 张不用了。）
 
@@ -18,10 +19,10 @@
 Two images are attached. The FIRST is DeepSeek (the blue whale maid girl). The SECOND is Qwen (the gentle rich young lady with periwinkle-blue hair, a small navy hat and a fan). Draw desktop-pet sprites for a short comedy "visitor" scene.
 
 FORMAT RULES (every image):
-- Pure flat white background (#FFFFFF). Nothing else: no floor, no cast shadow, no glow, no vignette, no frame.
+- Transparent background: real transparency (alpha), no floor, no ground shadow, no glow, no vignette, no frame. Keep the complete edges of the character (every hair strand, ribbon and tassel), nothing cropped.
 - No text, no letters, no numbers, no speech bubbles, no symbols floating in the air (no Zzz, no hearts, no sweat-drop icons in the air). The app draws all effects itself.
 - Exactly one character (except caught.png and bye.png, see below), full body, standing, centered. Head near the top and feet near the bottom; she fills about 90% of the image height.
-- A continuous, closed dark outline around the whole silhouette, so no white or pale part ever touches the white background directly.
+- A continuous, closed dark outline around the whole silhouette, so the edges stay clean against any background.
 - Same art style as the references: clean lineart, flat two-tone cel shading, soft palette, chibi about 2.5 heads tall, big head, long flowing hair.
 - Square image, 1024x1024 or larger. One image per file, saved under the exact filename given.
 - Every prop touches a hand or body; nothing floats.
