@@ -473,7 +473,7 @@ def pose_for_tool(t: str) -> str:
     # Hermes Agent：在本地找文件 / 翻历史会话 / 看终端输出 / 看图，都算看资料（名字里带 search，别当成上网搜）
     if t in ("search_files", "session_search", "read_terminal", "vision_analyze"):
         return "reading"
-    if "view_image" in t or t == "find_by_name":
+    if "view_image" in t or t in ("find_by_name", "zoom_image"):   # zoom_image：Qwen Code 放大看图
         return "reading"
     if t in ("read_url_content",) or t.startswith("browser"):
         return "searching"

@@ -98,6 +98,20 @@ class HookModelHostTests(unittest.TestCase):
         self.add_character('glm')
         self.fire('qwen', {'hook_event_name': 'SessionStart', 'session_id': 's1', 'model': 'glm-4.6', 'source': 'startup'})
         self.assertEqual(self.read('qwen-host.json')['character'], 'glm')
+    # Qwen Code 的工具 id（来自它自带的 docs/features/hooks.md 和工具名常量）：常用的都要演对动作
+    def test_qwen_code_tool_ids_map_to_poses(self):
+        self.add_character('qwen')
+        self.fire('qwen', {'hook_event_name': 'SessionStart', 'session_id': 's1', 'model': 'qwen3.8-max', 'source': 'startup'})
+        expect = {'read_file': 'reading', 'grep_search': 'reading', 'glob': 'reading', 'list_directory': 'reading',
+                  'zoom_image': 'reading', 'write_file': 'writing', 'edit': 'writing', 'run_shell_command': 'running',
+                  'web_fetch': 'searching', 'web_search': 'searching', 'agent': 'delegating',
+                  'ask_user_question': 'asking', 'image_gen': 'drawing'}
+        got = {}
+        for tool in expect:
+            self.fire('qwen', {'hook_event_name': 'PreToolUse', 'session_id': 's1', 'tool_name': tool, 'tool_input': {}})
+            got[tool] = self.read('qwen-state.json')['pose']
+        self.assertEqual(got, expect)
+
     def test_session_start_writes_heartbeat(self):
         self.add_character('qwen')
         self.fire('qwen', {'hook_event_name': 'SessionStart', 'session_id': 's1', 'model': 'qwen3.8-max', 'source': 'startup'})
