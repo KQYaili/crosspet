@@ -101,6 +101,11 @@ extension App {
     /// 桌宠页面发来的消息：「新功能」卡片点了「去看看」→ 打开设置停在「新功能」页
     func handlePet(_ body: Any) {
         if let d = body as? [String: Any], let tab = d["openSettings"] as? String { openSettingsAt(tab: tab) }
+        // 按时段换衣服（网页层判断好了时段）：只换这个角色已有的衣服，不切换当前角色
+        if let d = body as? [String: Any], let w = d["wear"] as? [String: Any], let id = w["id"] as? String, let skin = w["skin"] as? String,
+           characterIds.contains(id), skin.isEmpty || skinChoices[id]?.contains(where: { $0.id == skin }) == true {
+            wear(id, skin)
+        }
     }
 
     /// tab：打开后停在哪个标签页（nil = 上次看的那页）；窗口已经开着就切过去
@@ -141,7 +146,7 @@ extension App {
             "size": Double(petScale), "textSize": textScale, "textLinked": textLinked, "showName": showName, "eggs": eggsEnabled, "hideFullscreen": hideInFullscreen, "aura": auraMode, "followApps": followApps, "followEvents": followEvents,
             "gptQuota": defaults.bool(forKey: "gptQuota"), "agyQuota": defaults.bool(forKey: "agyQuota"), "gptQuotaNote": codexNote,
             "login": SMAppService.mainApp.status == .enabled,
-            "edgeDock": edgeDockEnabled, "dsQuota": dsQuotaEnabled, "quotaAggregate": quotaAggregate, "codexResets": codexResets, "peakBar": peakBar, "powerSave": powerSave,
+            "edgeDock": edgeDockEnabled, "dsQuota": dsQuotaEnabled, "quotaAggregate": quotaAggregate, "codexResets": codexResets, "peakBar": peakBar, "peakSkins": peakSkins, "powerSave": powerSave,
             "hideHotkey": hideHotkey, "hotkeyFailed": hotkeyFailed, "hotkeys": [["id": "off", "label": "不用快捷键"]] + Self.hotkeyChoices.map { ["id": $0.id, "label": $0.label] },
             "aiAutostart": aiAutostart,
             "character": currentId ?? characterIds.first ?? "",

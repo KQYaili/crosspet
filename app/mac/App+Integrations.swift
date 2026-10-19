@@ -205,6 +205,8 @@ extension App {
             case "codexResets":
                 let on = value as? Bool ?? false
                 defaults.set(on, forKey: "codexResets"); js("setCodexResets(\(on))")
+            case "peakSkins":
+                defaults.set(Self.cleanPeakSkins(value), forKey: "peakSkins"); js("setPeakSkins(\(peakSkinsJSON))")
             case "peakBar":
                 let on = value as? Bool ?? true
                 defaults.set(on, forKey: "peakBar"); js("setPeakBar(\(on))")

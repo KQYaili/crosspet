@@ -13,7 +13,23 @@ extension App {
     var dsQuotaEnabled: Bool { defaults.object(forKey: "dsQuota") as? Bool ?? true }
     /// 额度合并显示（默认关）：小窗把各家 AI 的额度排成几行，而不是只显示当前角色的。怎么排在网页里（quota-aggregate.js）
     var quotaAggregate: Bool { defaults.bool(forKey: "quotaAggregate") }
-    var peakBar: Bool { defaults.object(forKey: "peakBar") as? Bool ?? true }   // 额度栏的峰谷时间条（默认开，规则在网页层 peak-hours.js）
+    var peakBar: Bool { defaults.object(forKey: "peakBar") as? Bool ?? true }
+    /// 按时段换衣服：{ 角色: { peak: 皮肤, valley: 皮肤 } }（"" = 原版，没写 = 不换）。判断在网页层（peak-hours.js），这里只存
+    var peakSkins: [String: [String: String]] { Self.cleanPeakSkins(defaults.dictionary(forKey: "peakSkins")) }
+    static func cleanPeakSkins(_ v: Any?) -> [String: [String: String]] {
+        var out: [String: [String: String]] = [:]
+        for (id, x) in v as? [String: Any] ?? [:] {
+            guard let d = x as? [String: Any] else { continue }
+            var e: [String: String] = [:]
+            for k in ["peak", "valley"] { if let s = d[k] as? String { e[k] = s } }
+            if !e.isEmpty { out[id] = e }
+        }
+        return out
+    }
+    var peakSkinsJSON: String {
+        guard let data = try? JSONSerialization.data(withJSONObject: peakSkins), let s = String(data: data, encoding: .utf8) else { return "{}" }
+        return s
+    }   // 额度栏的峰谷时间条（默认开，规则在网页层 peak-hours.js）
     var codexResets: Bool { defaults.bool(forKey: "codexResets") }   // Codex 重置提醒（默认关，数据来自 codex-resets.com）
     /// 省电模式（默认关）：特效每秒 15 帧、闲着 10 秒就停（平时 30 帧、30 秒）
     var powerSave: Bool { defaults.bool(forKey: "powerSave") }
