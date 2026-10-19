@@ -183,7 +183,7 @@ extension App {
             case "followApps":
                 defaults.set(value as? Bool ?? true, forKey: "followApps")
             case "followEvents":
-                defaults.set(value as? Bool ?? true, forKey: "followEvents")
+                defaults.set(value as? Bool ?? false, forKey: "followEvents")
             case "hideFullscreen":
                 defaults.set(value as? Bool ?? true, forKey: "hideFullscreen"); applyFullscreenBehavior()
             case "eggs":

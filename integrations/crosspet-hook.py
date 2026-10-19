@@ -24,6 +24,8 @@ BIG_JOB_TOOLS = 8  # 一轮里用了这么多次工具，结束时「得意」�
 
 character = sys.argv[1] if len(sys.argv) > 1 else "claude"
 default_data = Path(os.environ.get("CROSSPET_DATA_DIR") or str(Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData/Local"))) / "CrossPet"))
+# 桌宠的数据目录（角色、退出记号）：设了 CROSSPET_DATA_DIR 就用它（测试也靠它），没设时 Windows 在 %LOCALAPPDATA%\CrossPet，macOS 在 Application Support
+app_data = default_data if (os.name == "nt" or os.environ.get("CROSSPET_DATA_DIR")) else Path.home() / "Library/Application Support/CrossPet"
 state_dir = Path(os.environ.get("CROSSPET_STATE_DIR") or (str(default_data / "state") if os.name == "nt" else "/tmp/crosspet"))
 
 # 跟着 AI 出现：开始干活（会话开始 / 发消息 / 调模型）时桌宠没开着就把它打开。
@@ -120,7 +122,7 @@ def app_started_at():
 
 def ensure_pet() -> str:
     """返回这次的结果（写进 <状态目录>/autostart.txt，排查「为什么没出来」用）"""
-    data = default_data if os.name == "nt" else Path.home() / "Library/Application Support/CrossPet"
+    data = app_data
     quit_flag = data / "user-quit"
     if quit_flag.exists():
         quit_at = quit_flag.stat().st_mtime
@@ -306,7 +308,7 @@ MULTI_MODEL_HOSTS = ("workbuddy", "zcode", "hermes", "qwen")
 # ZCode 默认用智谱的 GLM；Qwen Code 默认用自家的千问。它们只在会话开始时告诉模型名，
 # 之后的事件按会话 id 查当时记下的模型
 HOST_DEFAULT_MODEL = {"zcode": "glm", "qwen": "qwen"}
-characters_dir = (default_data if os.name == "nt" else Path.home() / "Library/Application Support/CrossPet") / "characters"
+characters_dir = app_data / "characters"
 
 
 def character_for_model(model: str):
