@@ -820,6 +820,9 @@ function setTucked(side, peek = false) {
   if (side === tucked && !!peek === tuckedPeek) return
   // 「新功能」卡片开着时缩回边上：卡片挂在屏幕边、点不到——先收起，等她再出来、闲着的时候重新弹
   if (side && !$('newsCard').classList.contains('hidden')) { hideNews(); queueNews(newsShown, 20000) }
+  // 演彩蛋时被拖到边上：彩蛋直接收场、换回原角色再缩进去——彩蛋角色没有贴边立绘，缩着又演不了下一步，
+  // 会一直停在那张图上直到超时；外壳这时量到的切口也是彩蛋的，记在原角色名下，之后贴边位置一直偏
+  if (side && egg) quitEggNow()
   const was = tucked, edge = side || was
   preloadEdges()
   const before = shownRect()
@@ -1530,15 +1533,16 @@ function eggStep(step) {
   document.documentElement.style.setProperty('--aura', char().aura || '#bcd4ff')
 }
 function playEgg(force) {
-  if (egg || !charId || char()?.egg) return false
+  if (egg || tucked || !charId || char()?.egg) return false   // 缩在边上不演：彩蛋角色没有贴边立绘
   const eggId = eggFor(charId)
   if (!eggId) return false
   if (!force && pose !== 'idle') return false
   const host = charId
-  egg = { host, timers: [], waiting: false }
+  const mine = egg = { host, timers: [], waiting: false }
   hideNews()   // 演彩蛋时「新功能」卡片收起
   clearTimeout(revertTimer); clearTimeout(pending)
   poof(() => {
+    if (egg !== mine) return   // 烟还没散就被收场了（比如刚冒出来就被拖到边上）
     charId = eggId; pose = null; currentUrl = ''
     const c = char()
     document.documentElement.style.setProperty('--accent', c.accent || '#e0b48a')
@@ -1569,6 +1573,20 @@ function leaveEgg(line, step = 'bye') {
   clearEggTimers()
   eggStep(step); say(line)
   egg.timers.push(setTimeout(() => endEgg(), EGG_BYE_MS))
+}
+// 立刻收场，不演 bye、不冒烟：被拖到边上时用
+function quitEggNow() {
+  if (!egg) return
+  const host = egg.host
+  clearEggTimers()
+  egg = null
+  charId = host; pose = null; currentUrl = ''
+  const c = char()
+  applyLook(c)
+  $('blink').src = c.blink || ''
+  $('caption').textContent = c.name
+  say('')
+  renderQuota()
 }
 function endEgg() {
   if (!egg) return
