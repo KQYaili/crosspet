@@ -71,6 +71,25 @@ static class Program
         Check("网页大小：两次量的不一样（还在变）不记", !ZoomCheck.Off(488, 477, 594, 531, 415, 408));
         Check("网页大小：量到的数不对劲（0 或负）不记", !ZoomCheck.Off(260, 362, 0, 0, 0, 0));
 
+        // 安装是否完整（#24：一键更新删到一半，characters、integrations 没了，之后每次启动都崩）
+        var icRoot = Path.Combine(Path.GetTempPath(), "crosspet-installcheck-" + Guid.NewGuid().ToString("N"));
+        string Make(string dir, params string[] parts) { Directory.CreateDirectory(dir); foreach (var x in parts) Directory.CreateDirectory(Path.Combine(dir, x)); return dir; }
+        var full = Make(Path.Combine(icRoot, "full"), "characters", "web", "integrations", "tools", "python");
+        Check("安装检查：齐全的不缺", InstallCheck.Missing(full).Count == 0);
+        var half = Make(Path.Combine(icRoot, "half"), "web", "tools", "python");
+        Check("安装检查：删到一半的列出缺了哪些", string.Join(",", InstallCheck.Missing(half)) == "characters,integrations");
+        Check("安装检查：目录不存在时全缺", InstallCheck.Missing(Path.Combine(icRoot, "nope")).Count == 5);
+        var cache = Path.Combine(icRoot, "CrossPet-update");
+        Check("修复包：没有缓存时找不到", InstallCheck.RepairPackage(cache) == null);
+        var oldPkg = Make(Path.Combine(cache, "v1.3.3", "CrossPet"), "characters", "web", "integrations", "tools", "python");
+        File.WriteAllText(Path.Combine(oldPkg, "install.ps1"), "");
+        var badPkg = Make(Path.Combine(cache, "v1.3.6", "CrossPet"), "web");   // 下载 / 解压没完成的
+        File.WriteAllText(Path.Combine(badPkg, "install.ps1"), "");
+        var newPkg = Make(Path.Combine(cache, "v1.3.4", "CrossPet"), "characters", "web", "integrations", "tools", "python");
+        File.WriteAllText(Path.Combine(newPkg, "install.ps1"), "");
+        Check("修复包：挑版本最新的完整安装包（不完整的跳过）", InstallCheck.RepairPackage(cache) == newPkg);
+        try { Directory.Delete(icRoot, true); } catch { }
+
         Console.WriteLine(fails == 0 ? "全部通过" : $"{fails} 项失败");
         return fails == 0 ? 0 : 1;
     }
