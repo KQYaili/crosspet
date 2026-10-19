@@ -299,6 +299,135 @@ if character == "gpt" and "transcript_path" in event:
     else:
         sys.exit(0)
 
+# CROSSPET_LOCAL_CODEX_TURN_ORDER_V1
+class _CodexTurnOrder:
+    """Serialize Codex writes and keep completed turns from being revived."""
+    def __init__(self, payload):
+        import atexit
+        self.sid = str(payload.get("session_id") or payload.get("sessionId") or payload.get("conversationId") or "")
+        self.tid = str(payload.get("turn_id") or "")
+        self.name = str(payload.get("hook_event_name") or "")
+        self.payload = payload
+        self.path = state_dir / ".codex-turn-order.json"
+        self.lock = open(state_dir / ".codex-turn-order.lock", "a+b")
+        if os.fstat(self.lock.fileno()).st_size == 0:
+            self.lock.write(b"\0")
+            self.lock.flush()
+        self.lock.seek(0)
+        self.locked = False
+        deadline = time.monotonic() + 1.0
+        while True:
+            try:
+                if os.name == "nt":
+                    import msvcrt
+                    msvcrt.locking(self.lock.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(self.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                self.locked = True
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    self.lock.close()
+                    raise TimeoutError("Codex observer lock busy")
+                time.sleep(0.01)
+        atexit.register(self.close)
+        try:
+            saved = json.loads(self.path.read_text(encoding="utf-8"))
+            self.sessions = saved.get("sessions", {})
+            if not isinstance(self.sessions, dict):
+                self.sessions = {}
+        except (OSError, ValueError, AttributeError):
+            self.sessions = {}
+        self.entry = self.sessions.get(self.sid, {})
+        if not isinstance(self.entry, dict):
+            self.entry = {}
+
+    def accept(self):
+        old_tid = str(self.entry.get("turn_id") or "")
+        retired = list(self.entry.get("retired_turns") or [])[-32:]
+        is_prompt = self.name == "UserPromptSubmit"
+        is_session_start = self.name == "SessionStart"
+        # Compact/resume SessionStart often has no turn_id. It must not retire an
+        # active turn or reopen a completed one; the next prompt starts new work.
+        if is_session_start and self.entry:
+            return self.reject("session-start-is-not-a-new-turn")
+        if old_tid and not self.tid and self.name in (
+                "PreToolUse", "PostToolUse", "SubagentStart", "SubagentStop",
+                "PreCompact", "PostCompact", "Stop", "Interrupt", "StopFailure", "PermissionRequest"):
+            return self.reject("missing-turn-id-for-modern-session")
+        if self.tid and self.tid in retired:
+            return self.reject("retired-turn")
+        if self.entry.get("terminal") and self.tid == old_tid and self.tid:
+            return self.reject("completed-turn")
+        if is_prompt or is_session_start:
+            if old_tid and old_tid != self.tid and old_tid not in retired:
+                retired.append(old_tid)
+            self.entry = {"turn_id": self.tid, "terminal": False, "tools": 0,
+                          "retired_turns": retired[-32:]}
+        elif old_tid and self.tid and self.tid != old_tid:
+            # UserPromptSubmit is authoritative for switching an existing session.
+            return self.reject("different-turn-without-prompt")
+        elif self.entry.get("terminal"):
+            # Legacy inputs without turn_id reopen on their next prompt.
+            return self.reject("completed-turn-legacy")
+        else:
+            self.entry.setdefault("turn_id", self.tid)
+            if not old_tid and self.tid:
+                self.entry["turn_id"] = self.tid
+            self.entry.setdefault("tools", 0)
+            self.entry.setdefault("retired_turns", retired)
+        terminal = self.name in ("Stop", "Interrupt", "StopFailure", "SessionEnd") or (
+            self.name == "PostCompact" and str(self.payload.get("trigger", "")).lower() == "manual")
+        self.entry.update(terminal=terminal, last_event=self.name, ts=time.time())
+        self.sessions[self.sid] = self.entry
+        return True
+
+    def reject(self, reason):
+        self.entry["last_rejected"] = {"event": self.name, "turn_id": self.tid,
+                                       "reason": reason, "ts": time.time()}
+        self.sessions[self.sid] = self.entry
+        self.finish()
+        return False
+
+    def finish(self):
+        try:
+            # Bound local metadata; no prompt text, tool inputs or outputs are saved.
+            recent = sorted(self.sessions.items(), key=lambda kv: float(kv[1].get("ts", 0)))[-128:]
+            tmp = self.path.with_name(f".codex-turn-order.{os.getpid()}.json")
+            tmp.write_text(json.dumps({"version": 1, "sessions": dict(recent)}), encoding="utf-8")
+            tmp.replace(self.path)
+        finally:
+            self.close()
+
+    def close(self):
+        if not self.locked:
+            return
+        try:
+            self.lock.seek(0)
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(self.lock.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(self.lock, fcntl.LOCK_UN)
+        finally:
+            self.locked = False
+            self.lock.close()
+
+
+_codex_order = None
+if len(sys.argv) > 1 and sys.argv[1] == "gpt" and (
+        event.get("session_id") or event.get("sessionId") or event.get("conversationId")):
+    try:
+        _codex_order = _CodexTurnOrder(event)
+    except (OSError, TimeoutError):
+        # This is a visual observer: a busy filesystem must never block AI work.
+        sys.exit(0)
+    if not _codex_order.accept():
+        sys.exit(0)
+
+
 # 多模型宿主（WorkBuddy、ZCode、Hermes Agent）：每条事件都带当前模型名，按它选角色；认不出的模型（混元、Kimi、GLM……）
 # 写给「当前角色」（current），桌宠用正在显示的角色演，不换人。当前角色另外记在 <宿主>-host.json，
 # 桌宠切到这个程序的窗口时按它换角色
@@ -318,6 +447,8 @@ def character_for_model(model: str):
         return "deepseek"
     if "claude" in m or "anthropic" in m:
         return "claude"
+    if "grok" in m or "xai" in m:
+        return "grok"
     if "gemini" in m:
         return "gemini"
     if m.startswith(("gpt", "o1", "o3", "o4", "codex", "chatgpt")) or "openai" in m:
@@ -340,7 +471,8 @@ def remember_session_model(host: str, fallback: str = "") -> str:
         known = dict(list(known.items())[-50:])  # 只留最近的会话
         try:
             state_dir.mkdir(parents=True, exist_ok=True)
-            tmp = state_dir / f".{host}-sessions.json"
+            tmp = (path.with_name(f".{path.stem}.{os.getpid()}{path.suffix}") if host == "gpt"
+                   else state_dir / f".{host}-sessions.json")
             tmp.write_text(json.dumps(known))
             tmp.replace(path)
         except Exception:
@@ -478,6 +610,8 @@ turn_file = state_dir / f"{character}-turn.json"
 
 
 def turn_tools() -> int:
+    if _codex_order is not None:
+        return int(_codex_order.entry.get("tools", 0))
     try:
         return int(json.loads(turn_file.read_text()).get("tools", 0))
     except Exception:
@@ -485,6 +619,8 @@ def turn_tools() -> int:
 
 
 def set_turn_tools(n: int) -> None:
+    if _codex_order is not None:
+        _codex_order.entry["tools"] = n
     turn_file.write_text(json.dumps({"tools": n}))
 
 
@@ -622,6 +758,9 @@ if session_id and (pose or name == "SessionEnd"):
     except Exception:
         pass
 
+
+if _codex_order is not None:
+    _codex_order.finish()
 
 if name in LAUNCH_EVENTS:
     ensure_pet_logged(f"{character} {name}")

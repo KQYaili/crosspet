@@ -231,6 +231,16 @@ let active = document.getElementById('a'), spare = document.getElementById('b')
 let tucked = null   // 贴边缩着：'left' / 'right'（见「贴边」）
 let tuckedPeek = false   // 缩着时鼠标移上来：探出来、好奇地看着你
 let shownAt = 0, pending = null, thinkTimer = null, revertTimer = null
+// Delayed actions belong to the displayed character and this display generation.
+// Events from a hidden AI still update its own cached state, without touching another character.
+let characterGeneration = 0, characterTimer = null, characterTarget = null
+function characterTimeout(fn, ms, owner = charId, generation = characterGeneration) {
+  return setTimeout(() => { if (owner === charId && generation === characterGeneration) fn() }, ms)
+}
+function clearCharacterTimers() {
+  clearTimeout(thinkTimer); clearTimeout(pending); clearTimeout(revertTimer); clearTimeout(stuckTimer)
+  thinkTimer = pending = revertTimer = stuckTimer = null
+}
 let lastActive = Date.now()
 const charState = {}, quota = {}, seenTool = {}, lastTrouble = {}
 
@@ -280,8 +290,9 @@ setInterval(() => {
 
 // instant：同一个姿态里只是数字变了（比如更新进度），直接换掉，不淡出淡入
 function setFx(p, instant) {
-  const fx = $('fx')
+  const fx = $('fx'), owner = charId, generation = characterGeneration
   const render = () => {
+    if (owner !== charId || generation !== characterGeneration || pose !== p) return
     // 角色可以在 character.json 的 fx 里把某个姿态的特效换成 effects.js 里的其他特效，比如 DeepSeek 思考时冒泡泡
     const named = char()?.fx?.[p]
     const inner = !window.CrossFx ? '' : named && CrossFx.named?.[named] ? CrossFx.named[named] : CrossFx.surroundings(p)
@@ -426,7 +437,7 @@ function tellReset(data = resetsData) {
   show(a.pose, true)
   say(pickLine(a.key, a.vars))
   clearTimeout(revertTimer)
-  revertTimer = setTimeout(() => { setPose(restPose()); say('') }, 8000)
+  revertTimer = characterTimeout(() => { setPose(restPose()); say('') }, 8000)
 }
 // 右键「会重置吗？」：先想一下，每次都现查（是你点的、不常点，查一次不费事）；这次没查到就照实说连不上，不拿旧结果顶替
 async function askReset() {
@@ -536,7 +547,7 @@ function show(p, urgent) {
   if (p === 'idle') p = restPose()   // AI 发来「闲着」（比如 DSH 新会话）时也要看额度：快用完了就是累 / 饿的样子
   const wait = shownAt + DWELL - Date.now()
   clearTimeout(pending)
-  if (!urgent && wait > 0) { pending = setTimeout(() => show(p, true), wait); return }
+  if (!urgent && wait > 0) { pending = characterTimeout(() => show(p, true), wait); return }
   shownAt = Date.now()
   clearTimeout(revertTimer)
   if (p !== pose) {
@@ -544,7 +555,7 @@ function show(p, urgent) {
     const lines = linesOf(p)
     say(lines ? pick(lines) : '')
   }
-  if (TRANSIENT[p]) revertTimer = setTimeout(() => { setPose(restPose()); say('') }, TRANSIENT[p])
+  if (TRANSIENT[p]) revertTimer = characterTimeout(() => { setPose(restPose()); say('') }, TRANSIENT[p])
 }
 
 // ---- 由 Swift 调用 ----
@@ -568,15 +579,21 @@ function greetDue(id) {
 
 function setCharacter(id, quiet) {
   if (egg) { clearEggTimers(); egg = null; charId = null }
-  if (!manifest.characters[id] || manifest.characters[id].egg || id === charId) return
+  if (!manifest.characters[id] || manifest.characters[id].egg || id === characterTarget || (id === charId && !characterTimer)) return
+  const generation = ++characterGeneration
+  clearTimeout(characterTimer)
+  characterTarget = id
+  clearCharacterTimers()
   if (multi) { const m = multi; multi = null; clearInterval(m.flipTimer); clearTimeout(m.recheck); clearTimeout(m.chatter); clearTimeout(m.sayTimer); for (const c of m.cards.values()) c.el.remove(); $('more').classList.remove('on') }
-  setTimeout(refreshMulti, 700)   // 换过去的角色如果也有好几个对话在干活，接着演
-  setTimeout(preloadEdges, 900)
+  characterTimeout(refreshMulti, 700, id, generation)   // 换过去的角色如果也有好几个对话在干活，接着演
+  characterTimeout(preloadEdges, 900, id, generation)
   const stage = $('stage')
   const p = $('poof'); p.classList.remove('go'); void p.offsetWidth; p.classList.add('go')
   stage.classList.add('swap')
-  setTimeout(() => {
-    charId = id; pose = null; currentUrl = ''
+  characterTimer = setTimeout(() => {
+    if (generation !== characterGeneration) return
+    characterTimer = null; characterTarget = null
+    charId = id; pose = null; currentUrl = ''; shownAt = 0
     const c = char()
     applyLook(c)
     $('blink').src = c.blink || ''
@@ -584,16 +601,17 @@ function setCharacter(id, quiet) {
     const s = charState[id]
     const busy = s && Date.now() / 1000 - s.ts < 60 && !TRANSIENT[s.pose] && s.pose !== 'idle'
     setPose(busy ? s.pose : restPose(), true)
+    watchStuck()   // A restored cached work pose needs its own fallback timer.
     // 这个时段 / 节日还没打过招呼：演专属的登场动作；打过了就用平常那句（30 分钟冷却）
     if (quiet) say('')
     else if (!timeGreet(id, busy)) say(greetDue(id) ? (c.greeting || `${c.name} 在这儿～`) : '')
     renderQuota()
-    if (id === 'gpt') setTimeout(announceReset, 2000)   // 不是 GPT 时攒下的重置提醒，切过来再说
+    if (id === 'gpt') characterTimeout(announceReset, 2000)   // 不是 GPT 时攒下的重置提醒，切过来再说
     const pend = pendingCelebration[id]
-    if (pend && Date.now() - pend.at < 10 * 60 * 1000) setTimeout(() => celebrate(id, pend.ev), 1200)
+    if (pend && Date.now() - pend.at < 10 * 60 * 1000) characterTimeout(() => celebrate(id, pend.ev), 1200)
     // 新立绘加载好再淡入，避免先看到空白
     const reveal = () => stage.classList.remove('swap')
-    if (active.complete && spare.complete) setTimeout(reveal, 60); else setTimeout(reveal, 160)
+    if (active.complete && spare.complete) characterTimeout(reveal, 60); else characterTimeout(reveal, 160)
   }, 330)
 }
 
@@ -688,7 +706,7 @@ function notifyUpdate(tag) {
   show('update', true)
   say(`有新版本 ${tag} 啦～右键菜单里点「更新」就好`)
   clearTimeout(revertTimer)
-  revertTimer = setTimeout(() => setPose(restPose()), 6500)
+  revertTimer = characterTimeout(() => setPose(restPose()), 6500)
 }
 
 // ---- 贴边 ----
@@ -833,7 +851,7 @@ const NOT_WORKING = new Set(['idle', 'sleeping', 'asking', 'tired', 'hungry', 'h
 let stuckTimer = null
 function watchStuck() {
   clearTimeout(stuckTimer)
-  stuckTimer = setTimeout(() => {
+  stuckTimer = characterTimeout(() => {
     if (egg || multi || updatingNow || !pose || NOT_WORKING.has(pose) || pose.startsWith('greet_') || pose.startsWith('fest_')) return
     clearTimeout(thinkTimer)
     show('idle', true)
@@ -1072,7 +1090,7 @@ function applyCharState(id, s) {
   }
   if (ev === 'PostToolUse' || ev === 'AfterTool' || ev === 'SubagentStop') {
     if (s.pose === 'oops') show('oops')
-    else thinkTimer = setTimeout(() => show('thinking'), BACK_TO_THINKING)
+    else thinkTimer = characterTimeout(() => show('thinking'), BACK_TO_THINKING)
   } else if (ev === 'UserPromptSubmit' || ev === 'BeforeAgent') {
     // 刚出错 / 被打断后你又发了消息（多半是在纠正她）：有 correctedPose 的角色先认个错
     // （Claude 的「You're absolutely right!」）
@@ -1080,11 +1098,11 @@ function applyCharState(id, s) {
     if (sorry && Date.now() - (lastTrouble[id] || 0) < 3 * 60 * 1000) {
       lastTrouble[id] = 0
       show(sorry, true)
-      thinkTimer = setTimeout(() => show('thinking'), DWELL + 500)
+      thinkTimer = characterTimeout(() => show('thinking'), DWELL + 500)
       return
     }
     show('listening', true)
-    thinkTimer = setTimeout(() => show('thinking'), LISTEN_TO_THINKING)
+    thinkTimer = characterTimeout(() => show('thinking'), LISTEN_TO_THINKING)
   } else if (ev === 'Stop' && pendingCelebration[id]?.afterWork && !sulking && !angerLevel(angerNow())) {
     // 干活途中额度刷新了（重置卡 / 换套餐 / 充值）：干完不演普通的开心，演 reset / 吃饭
     clearTimeout(pending)
@@ -1155,7 +1173,7 @@ function celebrate(id, ev) {
   show(p, true)
   say(pick(linesOf(own) || linesOf(p) || ['']))
   clearTimeout(revertTimer)
-  revertTimer = setTimeout(() => { setPose(restPose()); say('') }, 6500)
+  revertTimer = characterTimeout(() => { setPose(restPose()); say('') }, 6500)
 }
 
 // GPT 额度：外壳交来问 Codex 服务得到的原始额度（见 codex-quota.js），排好版再走 setQuota

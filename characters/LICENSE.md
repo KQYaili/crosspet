@@ -20,6 +20,7 @@
 | Gemini | 社区流行的 Gemini 娘设定（猫耳、异色瞳、四芒星发饰） |
 | Claude | 社区流行的 Claude 娘设定（铜橙色长发、橙花发饰、书） |
 | 彩蛋（DeepSeek cos Claude / GPT） | CrossPet 原创情节，基于以上角色 |
+| Grok | 原创角色「魅魔娘」，由 KQYaili 用生图工具绘制，用于 Cursor |
 
 参考资料：[萌娘百科 DeepSeek 娘](https://zh.moegirl.org.cn/DeepSeek%E5%A8%98)、[ai-school-op](https://github.com/lshhhhhhh/ai-school-op)、[openpet-ai-girls](https://github.com/AwesomeHou/openpet-ai-girls)。
 
