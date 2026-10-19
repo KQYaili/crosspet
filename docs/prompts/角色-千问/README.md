@@ -15,7 +15,7 @@
 | 一句话帮你办事 | 2026-01 接入淘宝闪购和支付宝，一句话点外卖，400 多项办事功能 | `running`：打电话吩咐下去，不自己动手；手忙脚乱时一边打电话一边看平板 |
 | 开源最大方 | Qwen 开源模型全球下载超 30 亿次，第一大开源家族 | `gift`（闲着的小动作）：从手提包掏出小礼盒分给你「大家都有份～」 |
 | 有钱好说话 | 人设 | `tired`（额度快用完）：举着金卡「再买就是了～」 |
-| DeepSeek 偷懒外包给千问 | 彩蛋（loki 定） | `egg-deepseek-qwen`，见 [06](06-彩蛋-DeepSeek外包.md) |
+| DeepSeek 偷懒外包给千问 | 彩蛋（loki 定）：你给 DeepSeek 的活她偷偷外包给千问，自己睡大觉 | `egg-qwen`（千问是当前角色时出现），见 [06](06-彩蛋-DeepSeek外包.md) |
 
 ## 全套（新画 55 张 + 设定稿 1 张，彩蛋另 5 张）
 
@@ -30,5 +30,5 @@
 | 6 | [06-彩蛋-DeepSeek外包.md](06-彩蛋-DeepSeek外包.md) | 5 |
 
 - **每批只附设定稿这一张**，衣服、帽子、扇子才不会每张不一样（彩蛋附两张）。
-- 画好放进 `characters/qwen/raw/`（彩蛋放 `characters/egg-deepseek-qwen/raw/`），文件名用清单里的，交给 Claude 导入（去白底、裁切、转 webp、写 `character.json` 和台词）。
+- 画好放进 `characters/qwen/raw/`（彩蛋放 `characters/egg-qwen/raw/`），文件名用清单里的，交给 Claude 导入（去白底、裁切、转 webp、写 `character.json` 和台词）。
 - 每批画完缩到约 200px 看：帽子歪在左边、辫子在右肩、扇子都在；和 Gemini、DeepSeek 并排时认得出是她（三个都是蓝紫系，靠帽子、扇子、白金配色区分）；表情温柔大方，不是傲娇。

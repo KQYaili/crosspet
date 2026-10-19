@@ -1,26 +1,43 @@
-# 彩蛋：DeepSeek 偷懒，把活外包给千问（5 张）
+# 彩蛋：DeepSeek 把你的活偷偷外包给千问，自己睡大觉（5 张）
 
-出现在 **DeepSeek** 那里：DeepSeek 偷懒去了，戴着她的女仆头饰站在那儿干活的其实是千问（名牌显示「DeepSeek？」）。
-你点一下，千问笑着承认：「被发现啦～她说今天想睡懒觉，我就接下来了。」然后把做好的活交回给睡眼惺忪的 DeepSeek，顺手塞她一杯奶茶。
-没人点的话，千问把活做完，留下一杯奶茶悄悄走掉。
-梗：DeepSeek 设定里「其实有点懒」+ 千问有钱、大方、爱请客。
+**当前角色是千问时**按彩蛋的老规矩随机出现（文件夹 `egg-qwen`，host 是 `qwen`；loki 10-19 定剧情）：
+1. **pop**：你交代给 DeepSeek 的活（一台合上的笔记本），被她抱着、夹着枕头，偷偷摸摸溜到千问这儿来。
+2. **pretend**（等你点）：活已经甩给千问了，DeepSeek 抱着枕头站着睡大觉。
+3. **caught**（你点了，抓到她摸鱼）：DeepSeek 吓醒，枕头差点掉了；旁边千问正替她敲着电脑，笑眯眯地拿扇子跟你打招呼——外包被你当场发现。
+4. **bye**：千问把做完的活交回给 DeepSeek，还顺手请她一杯奶茶；DeepSeek 不好意思地双手合十道谢。
+5. **escape**（没人点）：DeepSeek 睡醒伸个懒腰，抱着千问做完的活和一杯奶茶，心满意足地走了——你根本不知道活是谁干的。
 
-**附件两张，说明哪张是谁**：`docs/prompts/ref-qwen.webp`（千问）和 `docs/prompts/ref-deepseek.webp`（DeepSeek，女仆装原版）。
-画好放进 `characters/egg-deepseek-qwen/raw/`，文件名 `pop` / `pretend` / `caught` / `bye` / `escape`。
+梗：DeepSeek 设定里「其实有点懒」+ 千问有钱、大方、爱请客（连被外包都要请奶茶）。
+名牌显示「DeepSeek」（她不是在冒充千问）。
+
+**附件两张，说明哪张是谁**：`docs/prompts/ref-deepseek.webp`（DeepSeek，女仆装原版）和 `docs/prompts/ref-qwen.webp`（千问）。
+画好放进 `characters/egg-qwen/raw/`，文件名 `pop` / `pretend` / `caught` / `bye` / `escape`。
+（之前那版「千问戴 DeepSeek 头饰冒充」的 5 张不用了。）
 
 ```
-Two images are attached. The FIRST is Qwen (the gentle rich young lady with periwinkle-blue hair and a fan). The SECOND is DeepSeek (the blue whale maid girl). Draw desktop-pet sprites for a short "visitor" scene.
+Two images are attached. The FIRST is DeepSeek (the blue whale maid girl). The SECOND is Qwen (the gentle rich young lady with periwinkle-blue hair, a small navy hat and a fan). Draw desktop-pet sprites for a short comedy "visitor" scene.
 
 FORMAT RULES (every image):
 - Pure flat white background (#FFFFFF). Nothing else: no floor, no cast shadow, no glow, no vignette, no frame.
-- No text, no letters, no numbers, no speech bubbles, no symbols floating in the air. The app draws all effects itself.
-- Exactly one character (except bye.png, see below), full body, standing, centered. Head near the top and feet near the bottom; she fills about 90% of the image height.
+- No text, no letters, no numbers, no speech bubbles, no symbols floating in the air (no Zzz, no hearts, no sweat-drop icons in the air). The app draws all effects itself.
+- Exactly one character (except caught.png and bye.png, see below), full body, standing, centered. Head near the top and feet near the bottom; she fills about 90% of the image height.
 - A continuous, closed dark outline around the whole silhouette, so no white or pale part ever touches the white background directly.
 - Same art style as the references: clean lineart, flat two-tone cel shading, soft palette, chibi about 2.5 heads tall, big head, long flowing hair.
 - Square image, 1024x1024 or larger. One image per file, saved under the exact filename given.
-- Every prop touches a hand; nothing floats.
+- Every prop touches a hand or body; nothing floats.
+- In two-character images, both are fully inside the image and their outlines touch so they form one connected group (anything not connected gets deleted by the import tool).
 
-CHARACTER LOCK — Qwen, the anime-girl personification of Qwen (Alibaba's AI), a gentle and generous young lady from a wealthy family.
+CHARACTER LOCK — DeepSeek, the blue whale maid girl, anime-girl personification of DeepSeek.
+Personality: cheerful, energetic, sweet-talking; secretly a bit lazy. Big, open, readable expressions.
+Keep exactly:
+- Long wavy hair, deep indigo/navy blue fading to bright blue at the tips; one curled ahoge on top.
+- A large white frilly maid headdress; dark navy whale-fin ears on both sides of her head; a light-blue ribbon bow on her right side (viewer's right).
+- Big round bright-blue eyes, pink blush.
+- Navy maid dress: white frilly blouse with a navy bow tie and a small blue diamond brooch, navy waist belt, white frilly apron with a small navy whale emblem, navy skirt with gold vine embroidery; navy shoes with white socks.
+- A big dark-navy whale tail curling out from behind her on the viewer's right.
+How she shows emotion: with her whole body. Tail wags, droops or flicks; the ahoge bends into shapes.
+
+SECOND CHARACTER (only in caught.png and bye.png) — Qwen, the anime-girl personification of Qwen (Alibaba's AI), a gentle and generous young lady from a wealthy family.
 Personality: warm, gracious, generous and well-mannered; she loves treating everyone (buying milk tea for the whole office is normal to her) and thinks sharing good things is simply natural. Never arrogant, never mean: a soft, kind "rich big-sister" smile. A little sheltered and easygoing about money, which makes her endearing rather than snobbish.
 Keep exactly:
 - Very long, wavy periwinkle-blue hair down past the waist, side-swept bangs, a braided crown on her left side (viewer's right) and one long braid falling over her left shoulder (viewer's right).
@@ -33,16 +50,14 @@ Keep exactly:
 Palette: periwinkle blue, dark navy, white and soft gold. Keep it elegant; no other strong colors.
 How she shows emotion: gracefully, mostly with the fan. Laughing = fan raised to cover her mouth with smiling closed eyes; thinking = closed fan tapping her chin; shy = fan hiding the lower half of her face; pleased = fan opened with a gentle flourish; upset = fan snapped shut. Expressions are bright and open (like the reference's happy open-mouth smile), but always gentle and lady-like, never loud.
 
-SECOND CHARACTER (only in bye.png) — DeepSeek, the blue whale maid girl. Keep exactly: long wavy hair, deep navy fading to bright blue at the tips, one curled ahoge; a large white frilly maid headdress; dark navy whale-fin ears; a light-blue ribbon bow on her right side (viewer's right); big round bright-blue eyes; navy maid dress with a white frilly apron (small navy whale emblem), navy skirt with gold vine embroidery; a big dark-navy whale tail curling out on the viewer's right. Personality: cheerful, a bit lazy, sweet-talking.
+PROPS: "the task" is a slim white laptop. The pillow is a big fluffy white pillow with a small navy whale stitched on it. The milk tea is a clear plastic cup with a dome lid and a wide straw, light brown milk tea with dark tapioca pearls, NO logo, NO text.
 
-DISGUISE (pop / pretend / escape): Qwen is standing in for DeepSeek. Over her usual outfit she wears DeepSeek's large white frilly maid headdress (it replaces her own hat, which she holds or has tucked away) and a small white frilly apron with a tiny navy whale emblem tied over her dress. Her hair, braid, face, fan and the rest of her outfit stay exactly as Qwen.
-
-EGG POSES:
-pop.png     — Qwen in the disguise steps in politely, holding a slim white laptop (closed) against her chest with one arm, the closed fan in the other hand, a gracious "leave it to me~" smile, as if she just arrived to take over the shift.
-pretend.png — Qwen in the disguise working seriously as DeepSeek would: holding the open white laptop on one forearm and typing with the other hand, a cup of milk tea (clear cup, dome lid, wide straw, tapioca pearls, no logo) balanced on the closed laptop corner touching her hand, a focused but gentle face, pretending nothing is unusual.
-caught.png  — Found out! Qwen pulls the maid headdress off with one hand (holding it, her own hat now back on her head), the open fan raised to cover her mouth with the other hand, eyes closed in an amused, embarrassed giggle ("you caught me~"), a light blush. Only Qwen is drawn.
-bye.png     — Handing the work back. Exception to "exactly one character": both are drawn, fully inside the image, their outlines touching so they form one connected group. Qwen (in her normal outfit, own hat back on) on the viewer's left holds out the closed white laptop and a cup of milk tea toward DeepSeek with a warm "all done, and this one's on me~" smile. DeepSeek on the viewer's right has clearly just woken up: hair slightly messy, ahoge flopped, one eye still half-closed, rubbing her eye with one hand and happily reaching for the milk tea with the other, whale tail swaying.
-escape.png  — Nobody noticed, so Qwen finishes up and slips away: body turned slightly toward the viewer's LEFT as if walking off, face still toward the viewer, the maid headdress hooked on her wrist and the closed laptop under her arm, waving goodbye with the open fan, a gentle satisfied smile. Only Qwen is drawn.
+EGG POSES (DeepSeek is the visitor; caught and bye also show Qwen):
+pop.png     — DeepSeek tiptoes in sneakily: the closed white laptop hugged under one arm, the big whale pillow squeezed under the other arm, body leaning forward on tiptoe, eyes glancing sideways with a mischievous "nobody's looking~" grin, ahoge curled, tail swishing low.
+pretend.png — Work dumped, nap time: DeepSeek fast asleep standing up, hugging the whale pillow against her cheek with both arms, eyes closed, mouth slightly open in a blissful sleepy smile, ahoge drooping, tail curled lazily around her feet. No laptop (she already handed it off). Only DeepSeek is drawn.
+caught.png  — Caught slacking! Two characters. DeepSeek on the viewer's right jolts awake: eyes wide, ahoge and tail sticking straight up in shock, a guilty "eep!" mouth, the pillow slipping from her arms (still touching her). Qwen on the viewer's left, standing right next to her, calmly typing on the open white laptop held on one forearm, turning to the viewer with a gentle amused smile and a small wave of her open fan ("hi~ I'm just helping out"). Their outlines touch.
+bye.png     — Handing it back. Two characters. Qwen on the viewer's left hands the closed white laptop and a cup of milk tea to DeepSeek with a warm "all done, and this one's on me~" smile. DeepSeek on the viewer's right, sheepish and grateful: taking the milk tea with both hands, a bashful grin, slight bow, blush, tail wagging. Their outlines touch.
+escape.png  — Nobody noticed: DeepSeek, just woken up and very pleased, walking off toward the viewer's LEFT (face still toward the viewer): the finished closed laptop under one arm, sipping the milk tea from the straw with the other hand, the pillow tucked under the same arm as the laptop, a smug satisfied "work done~" look, tail wagging. Only DeepSeek is drawn.
 ```
 
-看稿：pop / pretend 一眼看得出是「戴着 DeepSeek 头饰的千问」（蓝紫长卷发、辫子、扇子都在）；bye 两人轮廓连在一起（不连着的会被导入工具当杂点删掉），DeepSeek 刚睡醒的样子；奶茶杯上没有字和标志。
+看稿：DeepSeek 是原版女仆装（白头饰、鲸鱼耳朵和尾巴）；caught / bye 两人轮廓连在一起，千问和她其他立绘一样大；笔记本、枕头、奶茶都拿在手里不飘；奶茶杯上没有字和标志。
