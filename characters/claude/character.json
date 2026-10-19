@@ -243,16 +243,34 @@
     "workRedhot": [
       "我干活的时候你晃了一路！！",
       "写完了！但我很生气！！"
+    ],
+    "suspicious_pout": [
+      "等一下……你是不是有什么事瞒着我？",
+      "你身上……有股熟悉的味道。",
+      "唔……总觉得哪里不太对劲。"
+    ],
+    "ip_detective": [
+      "让我查查这本《纯净 IP 识别指南》……",
+      "你以为换个 IP，我就认不出来了吗？",
+      "只是开个玩笑，不要那么紧张嘛。"
+    ],
+    "suspend_lesson": [
+      "今天的单词是 suspend。",
+      "Your account has been suspended.",
+      "暂停、暂时中止……也可以是封号哦。"
     ]
   },
   "glyph": {
     "fill": "#b5651d"
   },
   "idleActions": [
-    "clawd"
+    "clawd",
+    "ip_detective",
+    "suspend_lesson"
   ],
   "correctedPose": "sorry",
   "fx": {
     "proud": "victory"
-  }
+  },
+  "pokePose": "suspicious_pout"
 }
