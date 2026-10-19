@@ -224,6 +224,7 @@ const MOTION = {
 const LOCAL_LINES = {
   idle: ['……', '在呢'], pat: ['嘿嘿', '（蹭蹭）'], surprised: ['诶？！'], hum: ['♪～'], stretch: ['伸个懒腰～'],
   yawn: ['哈啊……'], sleeping: ['zZz'], tired: ['有点累了…'],
+  peakStart: ['高峰到了，换身衣服干活～'], valleyStart: ['空闲时段，半价啦～换身轻松的'],   // 按时段换衣服（皮肤可以自己写）
 }
 Object.assign(LOCAL_LINES, CodexResets.LINES)   // 重置提醒的默认台词（角色自己写了同名键就用角色的）
 // 新加的姿态还没画立绘时，先用哪张顶上
@@ -536,6 +537,45 @@ function peakTick() {
   clearTimeout(peakTimer)
   peakTimer = setTimeout(peakTick, 60e3 - peakNow() % 60e3 + 50)
   if (window.PeakHours?.RULES[charId]) renderQuota()
+  checkPeakOutfits()
+}
+
+// ---- 按时段换衣服（设置里「高峰穿 / 空闲穿」）----
+// 进入新的一段（高峰 ↔ 空闲）时按设置换；同一段里你手动换的不换回去（记号存在本机）。
+// 正在显示她：闲着才换——外壳换好立绘调 refreshLook，那里冒一团烟换上，再说一句换装台词；忙着就等下一分钟再看。
+// 没在显示她：悄悄换好。启动时进入了新的一段：换好，不演不说
+let peakSkins = null, outfitLine = null, outfitSayTimer = null, devPeakApplied = null
+function peakApplied(id, key) {
+  if (devPeakApplied) { if (key !== undefined) devPeakApplied[id] = key; return devPeakApplied[id] ?? null }   // 开发者控制台演的记在内存里，不动真的记号
+  let m = {}
+  try { m = JSON.parse(localStorage.getItem('crosspet-peak-applied')) || {} } catch {}
+  if (key !== undefined) { m[id] = key; try { localStorage.setItem('crosspet-peak-applied', JSON.stringify(m)) } catch {} }
+  return m[id] ?? null
+}
+// 外壳在网页加载完、设置变化时调。改设置不马上换：先把每个角色记成「这一段已经处理过」，等下一段
+function setPeakSkins(map) {
+  const startup = peakSkins === null
+  peakSkins = map && typeof map === 'object' ? map : {}
+  if (!startup) for (const id of Object.keys(PeakHours.RULES)) peakApplied(id, PeakHours.decide(PeakHours.RULES[id], peakNow(), null, null).key)
+  checkPeakOutfits(startup)
+}
+function peakBusy() {
+  return !!(egg || multi || updatingNow || farewellLine !== null || tucked || aiActivity() || !$('bubble').classList.contains('hide'))
+}
+function checkPeakOutfits(startup) {
+  if (!peakSkins || !window.PeakHours) return
+  for (const [id, rule] of Object.entries(PeakHours.RULES)) {
+    const c = manifest.characters[id]
+    if (!c) continue
+    const d = PeakHours.decide(rule, peakNow(), peakSkins[id], peakApplied(id))
+    if (d.skin === null) { if (d.key !== peakApplied(id)) peakApplied(id, d.key); continue }   // 这一段没设要穿什么
+    if ((c.skin || '') === d.skin) { peakApplied(id, d.key); continue }   // 已经穿着了
+    const showing = id === charId && !startup
+    if (showing && peakBusy()) continue   // 忙着：不记，下一分钟再看（那时时段变了就按新的）
+    peakApplied(id, d.key)
+    if (showing) { outfitLine = { id, key: d.kind === 'peak' ? 'peakStart' : 'valleyStart', at: Date.now() } }
+    toShell({ wear: { id, skin: d.skin } })
+  }
 }
 peakTick()
 
@@ -870,6 +910,12 @@ function refreshLook(id) {
   if (charId !== id || egg) return
   charId = null; preloaded = null
   setCharacter(id, true)
+  // 按时段换的衣服：换好（setCharacter 里冒烟、换图约 0.4 秒）再说换装台词——台词按换上之后的衣服取
+  if (outfitLine?.id === id && Date.now() - outfitLine.at < 8000) {
+    const key = outfitLine.key
+    setTimeout(() => { if (charId === id && !egg) { const line = pick(linesOf(key) || ['']); say(line); clearTimeout(outfitSayTimer); outfitSayTimer = setTimeout(() => { if ($('bubble').textContent === line) say('') }, 6000) } }, 700)
+  }
+  outfitLine = null
 }
 
 function setName(id, name) {

@@ -49,7 +49,15 @@
   const ticks = rule => [0, ...rule.peak.flat().map(s => mins(s) / 60), 24]
   const nowMinute = ms => Math.floor((ms - dayStart(ms)) / 60e3)
 
-  const api = { RULES, periodAt, segments, ticks, nowMinute }
+  // 按时段换衣服：choice = { peak: 皮肤, valley: 皮肤 }（'' = 原版，没写 = 不换）；appliedKey = 上次按规则处理到的那一段。
+  // 还在同一段就不换（这一段里你手动换的不会被换回去）；进入了新的一段才按设置换
+  function decide(rule, ms, choice, appliedKey) {
+    const p = periodAt(rule, ms), key = String(p.start)
+    const want = choice?.[p.kind]
+    return { key, kind: p.kind, skin: key !== appliedKey && typeof want === 'string' ? want : null }
+  }
+
+  const api = { RULES, periodAt, segments, ticks, nowMinute, decide }
   root.PeakHours = api
   if (typeof module !== 'undefined') module.exports = api
 })(typeof window !== 'undefined' ? window : globalThis)

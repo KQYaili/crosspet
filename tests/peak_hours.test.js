@@ -49,3 +49,19 @@ test('ticks / nowMinute', () => {
   assert.deepStrictEqual(P.ticks(GLM), [0, 14, 18, 24])
   assert.strictEqual(P.nowMinute(bj('2026-10-19T15:20:00')), 920)
 })
+
+test('decide：同一段不换、新一段按设置换、没设不换', () => {
+  const t = bj('2026-10-19T09:00:00'), ch = { peak: 'deepseek-hoodie', valley: '' }
+  const d = P.decide(DS, t, ch, null)
+  assert.deepStrictEqual(d, { key: String(t), kind: 'peak', skin: 'deepseek-hoodie' })
+  assert.strictEqual(P.decide(DS, t + 3600e3, ch, d.key).skin, null)                 // 同一段（你手动换了也不管）
+  assert.strictEqual(P.decide(DS, bj('2026-10-19T12:00:00'), ch, d.key).skin, '')   // 进入空闲 → 原版
+  assert.strictEqual(P.decide(DS, t, { valley: '' }, null).skin, null)              // 高峰没设 → 不换
+  assert.strictEqual(P.decide(DS, t, undefined, null).skin, null)                   // 这个角色完全没设
+})
+
+test('decide：睡眠跨过两段，只按最新一段', () => {
+  const ch = { peak: 'a', valley: 'b' }
+  const k = P.decide(DS, bj('2026-10-19T09:30:00'), ch, null).key
+  assert.deepStrictEqual(P.decide(DS, bj('2026-10-19T15:00:00'), ch, k), { key: String(bj('2026-10-19T14:00:00')), kind: 'peak', skin: 'a' })
+})
