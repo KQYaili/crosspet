@@ -315,7 +315,8 @@ def character_for_model(model: str):
     m = model.lower()
     if "glm" in m or "zhipu" in m or "chatglm" in m or "z.ai" in m or "zai-" in m:
         return "glm"
-    if "qwen" in m or "dashscope" in m or "bailian" in m or "tongyi" in m:
+    # coder-model：Qwen Code 用千问账号登录时报的模型别名（实为 Qwen 3.7 Max）
+    if "qwen" in m or "dashscope" in m or "bailian" in m or "tongyi" in m or m == "coder-model":
         return "qwen"
     if "kimi" in m or "moonshot" in m:
         return "kimi"

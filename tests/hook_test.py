@@ -112,6 +112,12 @@ class HookModelHostTests(unittest.TestCase):
             got[tool] = self.read('qwen-state.json')['pose']
         self.assertEqual(got, expect)
 
+    # 用千问账号登录时，Qwen Code 报的模型名是别名 coder-model（它的 QWEN_OAUTH_MODELS，实为 Qwen 3.7 Max），10-19 本机实测收到
+    def test_qwen_oauth_alias_coder_model_is_qwen(self):
+        self.add_character('qwen')
+        self.fire('qwen', {'hook_event_name': 'SessionStart', 'session_id': 's1', 'model': 'coder-model', 'source': 'startup'})
+        self.assertEqual(self.read('qwen-host.json')['character'], 'qwen')
+
     def test_session_start_writes_heartbeat(self):
         self.add_character('qwen')
         self.fire('qwen', {'hook_event_name': 'SessionStart', 'session_id': 's1', 'model': 'qwen3.8-max', 'source': 'startup'})
