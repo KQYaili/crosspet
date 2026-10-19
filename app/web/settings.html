@@ -123,6 +123,8 @@ input[type=range] { width: 150px; accent-color: var(--accent); }
     <div class="ctl"><label class="switch"><input type="checkbox" data-key="quotaAggregate"><span></span></label></div></div>
   <div class="item"><div class="label">Codex 重置提醒<small>官方提前宣布重置时，GPT 的额度下方多一行；右键「会重置吗？」可以问她。数据来自第三方网站 <button class="srclink" data-action="openCodexResets">codex-resets.com</button>，根据官方推文整理，预测不是 OpenAI 的承诺</small></div>
     <div class="ctl"><label class="switch"><input type="checkbox" data-key="codexResets"><span></span></label></div></div>
+  <div class="item"><div class="label">额度栏显示峰谷时段<small>DeepSeek、GLM 的额度下面画一条今天的时间条：红色高峰、绿色空闲，竖线是现在（北京时间）。按 DeepSeek 官方 API 和 GLM 编程套餐的规则，其他渠道以各自价格为准；法定节假日暂不识别</small></div>
+    <div class="ctl"><label class="switch"><input type="checkbox" data-key="peakBar"><span></span></label></div></div>
 </div>
 
 <div class="card" data-tab="ai" id="integrateCard">

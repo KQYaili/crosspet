@@ -205,6 +205,9 @@ extension App {
             case "codexResets":
                 let on = value as? Bool ?? false
                 defaults.set(on, forKey: "codexResets"); js("setCodexResets(\(on))")
+            case "peakBar":
+                let on = value as? Bool ?? true
+                defaults.set(on, forKey: "peakBar"); js("setPeakBar(\(on))")
             case "dsQuota":
                 let on = value as? Bool ?? true
                 defaults.set(on, forKey: "dsQuota")

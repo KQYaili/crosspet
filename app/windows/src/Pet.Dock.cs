@@ -35,6 +35,7 @@ namespace CrossPet
         static bool PowerSave => Store.Settings.TryGetValue("powerSave", out var v) && v is bool b && b;
         /// <summary>额度合并显示（默认关）：小窗把各家 AI 的额度排成几行，而不是只显示当前角色的。怎么排在网页里（quota-aggregate.js）</summary>
         static bool QuotaAggregate => Store.Flag("quotaAggregate");
+        static bool PeakBar => !(Store.Settings.TryGetValue("peakBar", out var v) && v is bool b && !b);   // 额度栏的峰谷时间条（默认开，规则在网页层 peak-hours.js）
         static bool CodexResets => Store.Flag("codexResets");   // Codex 重置提醒（默认关，数据来自 codex-resets.com）
         static bool DsQuotaEnabled => !(Store.Settings.TryGetValue("dsQuota", out var v) && v is bool b && !b);
         static bool EdgeDockEnabled => !(Store.Settings.TryGetValue("edgeDock", out var v) && v is bool b && !b);
