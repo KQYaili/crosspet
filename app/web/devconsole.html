@@ -123,6 +123,7 @@ textarea { min-height: 300px; font: 12px/1.5 ui-monospace, Menlo, monospace; }
   </section>
 </main>
 
+<script src="peak-hours.js"></script>
 <script>
 const $ = id => document.getElementById(id)
 // macOS：WKWebView 的 webkit.messageHandlers；Windows：WebView2 的 chrome.webview
@@ -330,6 +331,14 @@ const SCENES = [
       ]
       for (const [name, d] of tiers) { prog(name); pet(`devResetsPlay(${J(d)})`); await wait(10500) }
       pet('devResetsDone()'); prog('') } },
+  { id: 'peak', name: '峰谷换装', only: (c, id) => !!window.PeakHours?.RULES[id], exp: '把时间挪到下一个工作日 <b>8:59:50</b>：额度下的时间条竖线跳到 9 点前，10 秒后进入<b>高峰</b>——设置里选了「高峰穿」的话冒一团烟换上、说一句；再挪到 <b>11:59:50</b>，进入<b>空闲</b>换「空闲穿」的那件。没在设置里选衣服就只看时间条。不改你的设置，演完换回原来的衣服',
+    run: async (id, prog) => {
+      const day = 86400e3, bj = 8 * 3600e3, mid = Math.floor((Date.now() + bj) / day) * day - bj
+      let d = 1; while (![1, 2, 3, 4, 5].includes(new Date(mid + d * day + bj).getUTCDay())) d++
+      const at = h => mid + d * day + h * 3600e3 - 10e3
+      prog('高峰前 10 秒'); pet(`devPeakPlay(${at(9)})`); await wait(16000)
+      prog('空闲前 10 秒'); pet(`devPeakPlay(${at(12)})`); await wait(16000)
+      pet('devPeakDone()'); prog('') } },
   { id: 'feast', name: 'DeepSeek 充值', only: (c, id) => id === 'deepseek', exp: '余额变多 → <b>feast</b>：抱着比脑袋还大的饭碗开吃 + 彩纸；之后恢复真实余额',
     run: async (id) => { const s = await petStatus(), saved = s.quota[id] ?? null
       pet(`setQuota('deepseek', ${J({ text: '余额 ¥6.00', low: false, balance: 6 })})`); await wait(500)

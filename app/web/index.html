@@ -578,6 +578,23 @@ function checkPeakOutfits(startup) {
   }
 }
 peakTick()
+// 开发者控制台「峰谷换装」场景：把时间挪到 at（毫秒时间戳，切换点前几秒），用真实的「高峰穿 / 空闲穿」设置演；
+// 记号放内存（不动真的），devPeakDone 恢复时间、换回原来的衣服
+let devPeakSaved = null
+function devPeakPlay(at) {
+  if (!devPeakSaved) devPeakSaved = { id: charId, worn: manifest.characters[charId]?.skin || '' }
+  devPeakApplied = devPeakApplied || {}
+  devPeakShift = at - Date.now()
+  if (PeakHours.RULES[charId]) devPeakApplied[charId] = PeakHours.decide(PeakHours.RULES[charId], peakNow(), null, null).key   // 当前这一段算处理过，等切换点
+  peakTick()
+}
+function devPeakDone() {
+  if (!devPeakSaved) return
+  const { id, worn } = devPeakSaved
+  devPeakSaved = null; devPeakShift = 0; devPeakApplied = null
+  if ((manifest.characters[id]?.skin || '') !== worn) toShell({ wear: { id, skin: worn } })
+  peakTick()
+}
 
 // 额度聚合（设置里「合并显示各家额度」，默认关）：小窗把各家 AI 的额度排成几行，前面标名字；
 // 关着时只显示当前角色自己的额度。外壳在设置变化 / 启动时调 setQuotaAggregate
