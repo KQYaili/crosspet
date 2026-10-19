@@ -191,7 +191,7 @@ DeepSeek 和 GLM 是对手，会趁对方不在上门捣乱：用 GLM 时，Deep
 
 - **DeepSeek 娘**：原型「溟月」由 **上善无形** 创作（2025-06，CC BY-NC-SA 4.0）；深蓝女仆鲸鱼娘（社区昵称「大肥鱼」）由 B 站 **ZipZipPipe** 二创。
 - **GPT 娘（白龙）**：社区通称「御姐白龙」，出自 B 站 **ZipZipPipe**。
-- **GLM 娘（黑狐狸女仆）**：CrossPet 的原创设定，「心机涨价狐」的性格取自社区对智谱的印象。
+- **GLM 娘（黑狐狸女仆）**：形象出自 B 站 **ZipZipPipe**；「心机涨价狐」的性格和专属动作是 CrossPet 在此基础上的二创，取自社区对智谱的印象。
 - **Gemini 娘**、**Claude 娘**：参考社区流行的 AI 娘设定（如 [ai-school-op](https://github.com/lshhhhhhh/ai-school-op)、[openpet-ai-girls](https://github.com/AwesomeHou/openpet-ai-girls)）。
 - 「Claude」「GPT」「ChatGPT」「Codex」「DeepSeek」「Gemini」「Antigravity」「GLM」「ZCode」「WorkBuddy」「Hermes」是各自公司的商标，本项目仅用于指代对应产品。
 
