@@ -299,12 +299,13 @@ if character == "gpt" and "transcript_path" in event:
     else:
         sys.exit(0)
 
-# 多模型宿主（WorkBuddy、ZCode、Hermes Agent）：每条事件都带当前模型名，按它选角色；认不出的模型（混元、Kimi、GLM……）
+# 多模型宿主（WorkBuddy、ZCode、Hermes Agent、Qwen Code）：事件里带当前模型名就按它选角色；认不出的模型（混元、Kimi、GLM……）
 # 写给「当前角色」（current），桌宠用正在显示的角色演，不换人。当前角色另外记在 <宿主>-host.json，
 # 桌宠切到这个程序的窗口时按它换角色
-MULTI_MODEL_HOSTS = ("workbuddy", "zcode", "hermes")
-# ZCode 默认用智谱的 GLM；它只在会话开始时告诉模型名，之后的事件按会话 id 查当时记下的模型
-HOST_DEFAULT_MODEL = {"zcode": "glm"}
+MULTI_MODEL_HOSTS = ("workbuddy", "zcode", "hermes", "qwen")
+# ZCode 默认用智谱的 GLM；Qwen Code 默认用自家的千问。它们只在会话开始时告诉模型名，
+# 之后的事件按会话 id 查当时记下的模型
+HOST_DEFAULT_MODEL = {"zcode": "glm", "qwen": "qwen"}
 characters_dir = (default_data if os.name == "nt" else Path.home() / "Library/Application Support/CrossPet") / "characters"
 
 
@@ -312,6 +313,8 @@ def character_for_model(model: str):
     m = model.lower()
     if "glm" in m or "zhipu" in m or "chatglm" in m or "z.ai" in m or "zai-" in m:
         return "glm"
+    if "qwen" in m or "dashscope" in m or "bailian" in m or "tongyi" in m:
+        return "qwen"
     if "kimi" in m or "moonshot" in m:
         return "kimi"
     if "deepseek" in m:
@@ -328,23 +331,42 @@ def character_for_model(model: str):
 def remember_session_model(host: str, fallback: str = "") -> str:
     """有的宿主只在会话开始时给模型名：记下来（按会话 id），之后的事件查它"""
     sid = str(event.get("session_id") or event.get("sessionId") or "")
-    # claude / gpt 是角色名，<角色>-sessions.json 已经是多会话状态文件了，模型另记一个文件
-    path = state_dir / (f"{host}-models.json" if host in SELF_HOSTS else f"{host}-sessions.json")
+    # 宿主名本身就是角色名时（claude / gpt / qwen），<名字>-sessions.json 已经被多会话状态占用了（见 update_sessions），
+    # 模型得另记一个文件：不然记模型会把会话状态当模型名读回来（character_for_model 收到 dict 直接崩）
+    path = state_dir / (f"{host}-models.json" if host in NAMED_HOSTS else f"{host}-sessions.json")
+    model = str(event.get("model") or "")
+    if model and sid:
+        try:
+            state_dir.mkdir(parents=True, exist_ok=True)
+            # 同一宿主的几个会话会同时启动：锁住「读旧表 → 加新项 → 替换」整段。
+            # 临时文件也按目标文件命名，不能与 update_sessions 的 .qwen-sessions.json 抢同一路径。
+            with open(state_dir / f".{host}-models.lock", "a+b") as lock:
+                if os.name == "nt":
+                    import msvcrt
+                    msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(lock, fcntl.LOCK_EX)
+                try:
+                    try:
+                        known = json.loads(path.read_text())
+                    except Exception:
+                        known = {}
+                    known[sid] = model
+                    known = dict(list(known.items())[-50:])  # 只留最近的会话
+                    tmp = state_dir / f".{path.stem}.{os.getpid()}.json"
+                    tmp.write_text(json.dumps(known))
+                    tmp.replace(path)
+                finally:
+                    if os.name == "nt":
+                        lock.seek(0)
+                        msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+        except Exception:
+            pass
     try:
         known = json.loads(path.read_text())
     except Exception:
         known = {}
-    model = str(event.get("model") or "")
-    if model and sid:
-        known[sid] = model
-        known = dict(list(known.items())[-50:])  # 只留最近的会话
-        try:
-            state_dir.mkdir(parents=True, exist_ok=True)
-            tmp = state_dir / f".{host}-sessions.json"
-            tmp.write_text(json.dumps(known))
-            tmp.replace(path)
-        except Exception:
-            pass
     return model or known.get(sid, "") or fallback or HOST_DEFAULT_MODEL.get(host, "")
 
 
@@ -370,6 +392,8 @@ def installed(c) -> bool:
 # 按模型换成对应的角色，认不出的模型还是由自己来演。Codex 每条事件都带模型名；Claude Code 只在会话开始时给，
 # 另外看环境变量里的模型名和接口地址
 SELF_HOSTS = ("claude", "gpt")
+# 宿主名同时也是角色名的：它们的 <名字>-sessions.json 被多会话状态占用，记模型要另开一个文件（见 remember_session_model）
+NAMED_HOSTS = SELF_HOSTS + ("qwen",)
 if character in SELF_HOSTS:
     host = character
     # 先看事件里的模型名（Claude Code 会话开始时给的、Codex 每条都给的，是实际要用的那个）；
