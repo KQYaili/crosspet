@@ -36,7 +36,7 @@ namespace CrossPet
         /// <summary>额度合并显示（默认关）：小窗把各家 AI 的额度排成几行，而不是只显示当前角色的。怎么排在网页里（quota-aggregate.js）</summary>
         static bool QuotaAggregate => Store.Flag("quotaAggregate");
         static bool PeakBar => !(Store.Settings.TryGetValue("peakBar", out var v) && v is bool b && !b);   // 额度栏的峰谷时间条（默认开，规则在网页层 peak-hours.js）
-        static bool CodexResets => Store.Flag("codexResets");
+        static bool CodexResets => Store.Flag("codexResets");   // Codex 重置提醒（默认关，数据来自 codex-resets.com）
         /// <summary>按时段换衣服：{ 角色: { peak: 皮肤, valley: 皮肤 } }（"" = 原版，没写 = 不换）。判断在网页层（peak-hours.js），这里只存（和 macOS 的 cleanPeakSkins 一致）</summary>
         static Dictionary<string, object> CleanPeakSkins(object v)
         {
@@ -51,7 +51,7 @@ namespace CrossPet
             }
             return output;
         }
-        static Dictionary<string, object> PeakSkins => CleanPeakSkins(Store.Settings.TryGetValue("peakSkins", out var v) ? v : null);   // Codex 重置提醒（默认关，数据来自 codex-resets.com）
+        static Dictionary<string, object> PeakSkins => CleanPeakSkins(Store.Settings.TryGetValue("peakSkins", out var v) ? v : null);
         static bool DsQuotaEnabled => !(Store.Settings.TryGetValue("dsQuota", out var v) && v is bool b && !b);
         static bool EdgeDockEnabled => !(Store.Settings.TryGetValue("edgeDock", out var v) && v is bool b && !b);
         static void After(int ms, Action a)

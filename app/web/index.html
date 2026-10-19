@@ -530,6 +530,11 @@ function appendPeakBar(el) {
   box.append(wrap, ticks)
   if (el.classList.contains('agg')) box.style.gridColumn = '1 / -1'   // 合并显示时横跨整张表，放在最下面
   el.appendChild(box)
+  // 底栏（#foot）有高度预算，超了人物会被顶上去：放不下先去掉刻度，还放不下（合并显示四家、多行额度）就不画
+  const k = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--k')) || 1
+  const over = () => $('foot').offsetHeight > 62 * Math.max(1, k) + 0.5
+  if (over()) ticks.remove()
+  if (over()) box.remove()
 }
 // 每分钟（对齐到整分）挪一次时间条上的竖线；按时段换衣服也在这里看
 let peakTimer = null
@@ -545,6 +550,7 @@ function peakTick() {
 // 正在显示她：闲着才换——外壳换好立绘调 refreshLook，那里冒一团烟换上，再说一句换装台词；忙着就等下一分钟再看。
 // 没在显示她：悄悄换好。启动时进入了新的一段：换好，不演不说
 let peakSkins = null, outfitLine = null, outfitSayTimer = null, devPeakApplied = null
+const peakPend = {}   // 忙着没换成的：{ 角色: { key, skin: 挂起时她穿的 } }——挂起期间你手动换了，这一段就听你的
 function peakApplied(id, key) {
   if (devPeakApplied) { if (key !== undefined) devPeakApplied[id] = key; return devPeakApplied[id] ?? null }   // 开发者控制台演的记在内存里，不动真的记号
   let m = {}
@@ -572,9 +578,12 @@ function checkPeakOutfits(startup) {
     if (d.skin === null) { if (d.key !== peakApplied(id)) peakApplied(id, d.key); continue }   // 这一段没设要穿什么
     if ((c.skin || '') === d.skin) { peakApplied(id, d.key); continue }   // 已经穿着了
     const showing = id === charId && !startup
-    if (showing && peakBusy()) continue   // 忙着：不记，下一分钟再看（那时时段变了就按新的）
+    const pend = peakPend[id]
+    if (pend?.key === d.key && (c.skin || '') !== pend.skin) { delete peakPend[id]; peakApplied(id, d.key); continue }   // 等的时候你手动换了
+    if (showing && peakBusy()) { if (pend?.key !== d.key) peakPend[id] = { key: d.key, skin: c.skin || '' }; continue }   // 忙着：下一分钟再看（那时时段变了就按新的）
+    delete peakPend[id]
     peakApplied(id, d.key)
-    if (showing) { outfitLine = { id, key: d.kind === 'peak' ? 'peakStart' : 'valleyStart', at: Date.now() } }
+    if (showing) { outfitLine = { id, skin: d.skin, key: d.kind === 'peak' ? 'peakStart' : 'valleyStart', at: Date.now() } }
     toShell({ wear: { id, skin: d.skin } })
   }
 }
@@ -925,15 +934,16 @@ function configHealed() {
 
 // 换了衣服（皮肤）：外壳重新 init 过立绘清单后调它，正在显示的就是这个角色就重新换上
 function refreshLook(id) {
+  const ol = outfitLine; outfitLine = null
   if (charId !== id || egg) return
   charId = null; preloaded = null
   setCharacter(id, true)
-  // 按时段换的衣服：换好（setCharacter 里冒烟、换图约 0.4 秒）再说换装台词——台词按换上之后的衣服取
-  if (outfitLine?.id === id && Date.now() - outfitLine.at < 8000) {
-    const key = outfitLine.key
+  // 按时段换的衣服：换好（setCharacter 里冒烟、换图约 0.4 秒）再说换装台词——台词按换上之后的衣服取；
+  // 换上的不是要的那件（外壳没换成、这期间你手动换了别的）就不说
+  if (ol?.id === id && Date.now() - ol.at < 8000 && (manifest.characters[id]?.skin || '') === ol.skin) {
+    const key = ol.key
     setTimeout(() => { if (charId === id && !egg) { const line = pick(linesOf(key) || ['']); say(line); clearTimeout(outfitSayTimer); outfitSayTimer = setTimeout(() => { if ($('bubble').textContent === line) say('') }, 6000) } }, 700)
   }
-  outfitLine = null
 }
 
 function setName(id, name) {
