@@ -292,7 +292,7 @@ setInterval(() => {
 function setFx(p, instant) {
   const fx = $('fx'), owner = charId, generation = characterGeneration
   const render = () => {
-    if (owner !== charId || generation !== characterGeneration || pose !== p) return
+    if (owner !== charId || generation !== characterGeneration || pose !== p || multi) return   // 多会话时特效一直收着
     // 角色可以在 character.json 的 fx 里把某个姿态的特效换成 effects.js 里的其他特效，比如 DeepSeek 思考时冒泡泡
     const named = char()?.fx?.[p]
     const inner = !window.CrossFx ? '' : named && CrossFx.named?.[named] ? CrossFx.named[named] : CrossFx.surroundings(p)
@@ -469,10 +469,10 @@ function announceReset() {
     // tired / sleeping 时气泡里一直挂着「额度快用完了」「zZz」这种待机台词，可以直接盖过去，不用等它收起
     const resting = pose === 'idle' || pose === 'tired' || pose === 'sleeping'
     const quiet = $('bubble').classList.contains('hide') || pose !== 'idle'
-    if (resting && quiet && !egg && aiActivity() !== 'work') {
+    if (resting && quiet && !egg && aiActivity() !== 'work' && !characterTimer) {   // 正在换角色：换完再说
       resetsWaiting = false; resetsTold(a.id); tellReset(); return
     }
-    if (++tries < 30) setTimeout(attempt, 20000); else resetsWaiting = false
+    if (++tries < 30) setTimeout(attempt, characterTimer ? 1000 : 20000); else resetsWaiting = false   // 只是在换角色：换完马上再看
   }
   setTimeout(attempt, 3000)
 }
@@ -563,6 +563,8 @@ function init(m) {
   manifest = m
   for (const c of Object.values(m.characters))
     for (const list of Object.values(c.poses)) for (const u of list) { const i = new Image(); i.onerror = () => window.chrome?.webview?.postMessage({ imageError: u }); i.src = u }   // 预加载失败也报（页面里的监听收不到）
+  // 正在换角色、要换上的那个还在新清单里：让它换完（换衣服时外壳会重新 init）
+  if (characterTarget && manifest.characters[characterTarget]) return
   // 没有当前角色时取 id 排序后的第一个：macOS 的清单是 Swift 字典序列化出来的，key 顺序每次启动都不同（Windows 本来就是排好序的）
   if (!charId || !manifest.characters[charId]) setCharacter(Object.keys(m.characters).sort().find(k => !m.characters[k].egg), true)
   else { $('caption').textContent = char().name }
@@ -593,7 +595,9 @@ function setCharacter(id, quiet) {
   characterTimer = setTimeout(() => {
     if (generation !== characterGeneration) return
     characterTimer = null; characterTarget = null
+    if (!manifest.characters[id]) { stage.classList.remove('swap'); watchStuck(); return }   // 等的这一会儿清单换过，这个角色不在了：留在原来那个
     charId = id; pose = null; currentUrl = ''; shownAt = 0
+    lastActive = Date.now()   // 闲了多久从换上来算起：不然闲久了再切过来，打完招呼就睡着
     const c = char()
     applyLook(c)
     $('blink').src = c.blink || ''
@@ -602,6 +606,8 @@ function setCharacter(id, quiet) {
     const busy = s && Date.now() / 1000 - s.ts < 60 && !TRANSIENT[s.pose] && s.pose !== 'idle'
     setPose(busy ? s.pose : restPose(), true)
     watchStuck()   // A restored cached work pose needs its own fallback timer.
+    // 刚发了消息就切过来（听着的样子）：和平常一样，听一会儿再转去思考，不然会一直停在「听」
+    if (busy && s.pose === 'listening') thinkTimer = characterTimeout(() => show('thinking'), LISTEN_TO_THINKING)
     // 这个时段 / 节日还没打过招呼：演专属的登场动作；打过了就用平常那句（30 分钟冷却）
     if (quiet) say('')
     else if (!timeGreet(id, busy)) say(greetDue(id) ? (c.greeting || `${c.name} 在这儿～`) : '')
@@ -832,7 +838,7 @@ function configHealed() {
 
 // 换了衣服（皮肤）：外壳重新 init 过立绘清单后调它，正在显示的就是这个角色就重新换上
 function refreshLook(id) {
-  if (charId !== id || egg) return
+  if (charId !== id || egg || (characterTarget && characterTarget !== id)) return   // 正在换成别人：让它换完
   charId = null; preloaded = null
   setCharacter(id, true)
 }
@@ -951,7 +957,7 @@ function refreshMulti() {
   const map = currentSessions(), now = Date.now() / 1000
   const live = Object.entries(map).map(([sid, e]) => [sid, e, sessionKind(e, now)]).filter(x => x[2])
   const busy = live.filter(x => x[2] === 'work' || x[2] === 'ask').length
-  if (!multi && (busy < 2 || egg || farewellLine !== null || updatingNow)) return
+  if (!multi && (busy < 2 || egg || farewellLine !== null || updatingNow || characterTimer)) return   // 正在换角色：换完那一下再看
   // 只剩一个（或没有）对话在干活：等干完 / 出错的卡片演完（几秒），她就恢复成平常一个对话的样子
   if (multi && busy < 2 && !live.some(x => x[2] === 'done' || x[2] === 'error')) return endMulti()
   if (!multi) startMulti()
@@ -1164,7 +1170,7 @@ function quotaEvent(id, q) {
 }
 function celebrate(id, ev) {
   if (standsIn(id)) id = charId   // 代演（reactTo）：她响应的 AI 额度刷新了，她来演
-  if (id !== charId || egg) { pendingCelebration[id] = { ev, at: Date.now() }; return }  // 等切到她时再演
+  if (id !== charId || egg || characterTimer) { pendingCelebration[id] = { ev, at: Date.now() }; return }  // 等切到她时再演（正在换角色也算还没切到）
   // 正在干活：额度记录是 AI 回复的半路写下的，这时演会被紧跟着的干活动作盖掉，看不见——留到这一轮干完（Stop）再演
   if (aiActivity() === 'work') { pendingCelebration[id] = { ev, at: Date.now(), afterWork: true }; return }
   delete pendingCelebration[id]
@@ -1421,15 +1427,16 @@ function eggStep(step) {
   document.documentElement.style.setProperty('--aura', char().aura || '#bcd4ff')
 }
 function playEgg(force) {
-  if (egg || !charId || char()?.egg) return false
+  if (egg || !charId || char()?.egg || characterTimer) return false   // 正在换角色时不出彩蛋：演完会回到换走之前的那个
   const eggId = eggFor(charId)
   if (!eggId) return false
   if (!force && pose !== 'idle') return false
   const host = charId
-  egg = { host, timers: [], waiting: false }
+  const mine = egg = { host, timers: [], waiting: false }
   hideNews()   // 演彩蛋时「新功能」卡片收起
   clearTimeout(revertTimer); clearTimeout(pending)
   poof(() => {
+    if (egg !== mine) return   // 等的这一会儿换了角色，彩蛋已经取消
     charId = eggId; pose = null; currentUrl = ''
     const c = char()
     document.documentElement.style.setProperty('--accent', c.accent || '#e0b48a')
