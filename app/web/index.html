@@ -491,7 +491,7 @@ function devResetsDone() {
 // 额度下方那一行（只在官方宣布、还没执行时有）
 function appendResetNotice(el) {
   if (!resetsOn || charId !== 'gpt') return
-  const t = CodexResets.notice(resetsData, codexResetSeenAt)
+  const t = CodexResets.notice(resetsData, codexResetSeenAt, Date.now() / 1000)
   if (!t) return
   const line = document.createElement('div')
   line.className = 'notice'

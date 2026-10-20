@@ -114,3 +114,35 @@ test('usableLines：只挑数据齐全的句子，角色的都用不了时退回
   assert.deepStrictEqual(R.usableLines(['有点风声，{chance}% 吧'], 'resetMid', {}), ['有点风声……别太指望。'])
   assert.deepStrictEqual(R.usableLines(['{x}'], 'nope', {}), [''])
 })
+
+// 官方没提前宣布、直接发「已经重置」（10-20 那次就是这样）：重置后 5 小时内算「刚重置过」
+const latestAt = (sec) => ({ id: 'r1', reset_type: 'regular', announced_at: new Date(sec * 1000).toISOString(), text: 't', source: { type: 'x_post', author: 'thsottiaux', url: 'u' } })
+test('刚重置过：5 小时内问她答 recent，过了答 none', () => {
+  const d = R.parse(base({ latest_reset: latestAt(NOW - 2 * 3600) }))
+  const a = R.answer(d, NOW, 0)
+  assert.strictEqual(a.tier, 'recent')
+  assert.strictEqual(a.pose, 'reset')
+  assert.strictEqual(a.key, 'resetRecent')
+  assert.strictEqual(a.vars.ago, '2 小时前')
+  assert.strictEqual(R.answer(R.parse(base({ latest_reset: latestAt(NOW - 20 * 60) })), NOW, 0).vars.ago, '20 分钟前')
+  assert.strictEqual(R.answer(R.parse(base({ latest_reset: latestAt(NOW - 6 * 3600) })), NOW, 0).tier, 'none')
+})
+test('刚重置过：额度下方的一行', () => {
+  assert.strictEqual(R.notice(R.parse(base({ latest_reset: latestAt(NOW - 2 * 3600) })), 0, NOW), '✨ 2 小时前刚重置过')
+  assert.strictEqual(R.notice(R.parse(base({ latest_reset: latestAt(NOW - 6 * 3600) })), 0, NOW), '')
+})
+test('刚重置过：新宣布优先于「刚重置过」', () => {
+  const d = R.parse(base({ latest_reset: latestAt(NOW - 3600), scheduled_reset: sched() }))
+  assert.strictEqual(R.answer(d, NOW, 0).tier, 'announced')
+  assert.ok(R.notice(d, 0, NOW).startsWith('🔔'))
+})
+test('刚重置过：主动说一次；说过或我们自己已经看到重置就不说', () => {
+  const d = R.parse(base({ latest_reset: latestAt(NOW - 3600) }))
+  assert.deepStrictEqual(R.toAnnounce(d, NOW, 0, []), { id: 'r:r1' })
+  assert.strictEqual(R.toAnnounce(d, NOW, 0, ['r:r1']), null)
+  assert.strictEqual(R.toAnnounce(d, NOW, NOW - 600, []), null)   // 额度变化已经判出重置、庆祝过了
+  assert.strictEqual(R.toAnnounce(R.parse(base({ latest_reset: latestAt(NOW - 6 * 3600) })), NOW, 0, []), null)
+})
+test('LINES：resetRecent 有默认句', () => {
+  assert.ok(R.LINES.resetRecent.length && R.LINES.resetRecent.every(l => l.includes('{ago}') || !l.includes('{')))
+})
