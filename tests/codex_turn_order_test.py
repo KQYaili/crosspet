@@ -82,6 +82,55 @@ class CodexTurnOrderTest(unittest.TestCase):
         self.assertEqual(set(sessions), {"parent", "other"})
         self.assertTrue(all(item["event"] == "Stop" for item in sessions.values()))
 
+    def test_subagent_events_follow_the_root_turn(self):
+        # Codex 的子代理：主会话的 session_id、子线程自己的 turn_id 和 agent_id；它的第一条消息也触发 UserPromptSubmit
+        child = dict(tid="C1", agent_id="child-1", agent_type="worker")
+        self.send("UserPromptSubmit")
+        self.send("PreToolUse", tool_name="spawn_agent")
+        self.send("SubagentStart", **child)
+        self.assertEqual(self.send("UserPromptSubmit", **child)["event"], "SubagentStart")
+        self.assertEqual(self.send("PreToolUse", tool_name="exec_command", **child)["pose"], "running")
+        self.send("SubagentStop", **child)
+        self.send("PostToolUse", tool_name="wait_agent")
+        self.assertEqual(self.send("Stop")["pose"], "happy")
+
+    def test_subagent_after_root_stop_stays_finished(self):
+        child = dict(tid="C1", agent_id="child-1", agent_type="worker")
+        self.send("UserPromptSubmit")
+        self.send("Stop")
+        for late in ("SubagentStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "SubagentStop"):
+            with self.subTest(late=late):
+                current = self.send(late, tool_name="exec_command", **child)
+                self.assertEqual((current["event"], current["pose"]), ("Stop", "happy"))
+        self.assertEqual(self.send("UserPromptSubmit", tid="T2")["pose"], "listening")
+
+    def test_manual_compact_is_its_own_turn(self):
+        # 手动 /compact 单独算一轮：新的 turn_id，没有 UserPromptSubmit，也没有 Stop
+        self.send("UserPromptSubmit")
+        self.send("Stop")
+        self.assertEqual(self.send("PreCompact", tid="K1", trigger="manual")["pose"], "compact")
+        current = self.send("PostCompact", tid="K1", trigger="manual")
+        self.assertEqual((current["event"], current["pose"]), ("Stop", "happy"))
+        self.assertEqual(self.send("SubagentStop", tid="T1")["event"], "Stop")
+
+    def test_codex_keeps_its_tool_count_to_itself(self):
+        # Codex 换成 Claude 的模型时由 Claude 来演：它的计数记在自己那边，不把 Claude Code 正数着的清零
+        claude = self.data / "characters" / "claude"
+        claude.mkdir(parents=True)
+        (claude / "character.json").write_text("{}", encoding="utf-8")
+        (claude / "idle.webp").write_bytes(b"RIFF")
+
+        def claude_code(name, **extra):
+            return invoke(self.state, self.data, {"hook_event_name": name, "session_id": "cc", **extra}, "claude")
+        claude_code("UserPromptSubmit")
+        for _ in range(7):
+            claude_code("PreToolUse", tool_name="Read")
+        self.send("UserPromptSubmit", sid="codex", tid="X1", model="claude-sonnet-5")
+        host = json.loads((self.state / "gpt-host.json").read_text(encoding="utf-8-sig"))
+        self.assertEqual(host["character"], "claude")
+        claude_code("PreToolUse", tool_name="Edit")
+        self.assertEqual(claude_code("Stop")["pose"], "proud")
+
     def test_eight_tools_finish_proud(self):
         self.send("UserPromptSubmit")
         for _ in range(8):

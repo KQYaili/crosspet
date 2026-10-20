@@ -37,6 +37,7 @@ function characterForModel(model: string): string | undefined {
   if (/glm|zhipu|chatglm|z\.ai|zai-/.test(m)) return 'glm'
   if (m.includes('deepseek')) return 'deepseek'
   if (/claude|anthropic|opus|sonnet|haiku/.test(m)) return 'claude'
+  if (/grok|xai/.test(m)) return 'grok'   // 和 crosspet-hook.py 一致
   if (m.includes('gemini')) return 'gemini'
   if (/^(gpt|o[1-9]|codex|chatgpt)/.test(m) || m.includes('openai')) return 'gpt'
   return undefined
