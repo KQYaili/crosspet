@@ -45,6 +45,7 @@
 | **GLM**（智谱 ZCode） | ✅ | ✅ ZCode 钩子 | — |
 | **WorkBuddy**（腾讯，多模型） | ✅ 按当前模型 | ✅ 钩子 | — |
 | **Hermes Agent**（Nous Research，多模型） | ✅ 按当前模型 | ✅ 插件 | — |
+| **Cursor** | ✅ 默认 GPT，可指定自定义角色 | ✅ 观察者钩子 | — |
 
 DeepSeek Harness、WorkBuddy、ZCode、Hermes Agent 里都能用好几家的模型：换成哪家的模型，她就换成哪家的角色；Claude Code 走别家的兼容接口（比如 DeepSeek、智谱）、Codex 换成别家模型时也一样（按模型名和 Claude Code 的接口地址判断，认不出的还是 Claude / GPT 自己）；没有对应角色的模型（混元、Kimi、Hermes 自家模型……）由当前角色来演。ZCode 和 WorkBuddy 的额度 / 积分只能拿你的登录凭据去问服务器，CrossPet 不碰凭据，所以不显示。Gemini 桌面版没有对外接口，切过去只会换形象；Antigravity 的桌面版和命令行都能跟着干活。「等你回答」目前认 Claude Code、DeepSeek Harness、ZCode 和 Hermes Agent：Codex 提问时不触发钩子，Antigravity 没有提问的信号。
 
@@ -95,7 +96,7 @@ cd crosspet
 会编译、装到 `~/Applications`，然后挨个问你要接哪些 AI。只想接某一个也行：
 
 ```bash
-python3 tools/integrate.py install codex     # 可选：claude-hooks、claude-mod、codex、deepseek、antigravity、gemini、workbuddy、zcode、hermes
+python3 tools/integrate.py install codex     # 可选：claude-hooks、claude-mod、codex、deepseek、antigravity、gemini、workbuddy、zcode、hermes、cursor
 python3 tools/integrate.py status            # 看看现在接了哪些
 ```
 

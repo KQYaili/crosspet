@@ -108,23 +108,24 @@ extension App {
     func hostApp(_ bundle: String) -> String? {
         if bundle.hasPrefix("com.workbuddy.") { return "workbuddy" }
         if bundle == "dev.zcode.app" { return "zcode" }
+        if bundle == "com.todesktop.230313mzl4w4u92" { return "cursor" }
         return nil
     }
 
     func hostCharacter(_ id: String) -> String {
         let url = stateDir.appendingPathComponent("\(id)-host.json")
+        let fallback = Self.hostDefaults[id].flatMap { characterIds.contains($0) ? $0 : nil } ?? id
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
               let stamp = attrs[.modificationDate] as? Date, Date().timeIntervalSince(stamp) < 86400,
               let data = try? Data(contentsOf: url),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             // 还不知道它在用哪个模型（刚装好、还没对话过）：先按它默认的模型换，比如 ZCode 默认是 GLM
-            if let d = Self.hostDefaults[id], characterIds.contains(d) { return d }
-            return id
+            return fallback
         }
-        guard let c = obj["character"] as? String, characterIds.contains(c) else { return id }
+        guard let c = obj["character"] as? String, characterIds.contains(c) else { return id == "cursor" ? fallback : id }
         return c
     }
-    static let hostDefaults = ["zcode": "glm"]
+    static let hostDefaults = ["zcode": "glm", "cursor": "gpt"]
 
     /// 切到某个 AI 的 App 后，要在它上面停留一会儿才换角色：
     /// App 启动时窗口会短暂地抢焦点、让焦点，立即响应会来回闪。

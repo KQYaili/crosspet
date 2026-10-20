@@ -1,5 +1,7 @@
 import contextlib
 import os
+import sys
+import shlex
 import importlib.util
 import io
 import tempfile
@@ -52,10 +54,21 @@ class IntegrationTests(unittest.TestCase):
         self.assertFalse(any(str(exe) in f for f in found), found)
     def test_codex_programs_lists_override_with_version(self):
         fake = str(Path(__file__).resolve().parent / 'fake_codex.py')
-        with mock.patch.dict(os.environ, {'CROSSPET_CODEX_BIN': fake}):
-            found = integrate.codex_programs()
-        self.assertTrue(found and found[0].startswith(fake), found)
-        self.assertIn('codex-cli 0.0.0-fake', found[0])
+        with tempfile.TemporaryDirectory() as tmp:
+            if os.name == 'nt':
+                # Windows cannot execute a shebang .py directly with CreateProcess.
+                wrapper = Path(tmp) / 'codex-test.cmd'
+                wrapper.write_text(f'@echo off\n"{sys.executable}" "{fake}" %*\n', encoding='utf-8')
+            else:
+                wrapper = Path(tmp) / 'codex-test'
+                wrapper.write_text('#!/bin/sh\nexec ' + shlex.join([sys.executable, fake]) + ' "$@"\n',
+                                   encoding='utf-8', newline='\n')
+                wrapper.chmod(0o755)
+            fake = str(wrapper)
+            with mock.patch.dict(os.environ, {'CROSSPET_CODEX_BIN': fake}):
+                found = integrate.codex_programs()
+            self.assertTrue(found and found[0].startswith(fake), found)
+            self.assertIn('codex-cli 0.0.0-fake', found[0])
     def test_preserve_other_hook_in_same_group(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / 'settings.json'
@@ -159,6 +172,60 @@ class DeepSeekPatchTests(unittest.TestCase):
         out = self.run_dsh(True)
         self.assertNotIn('找回', out)
         self.assertEqual(self.patch.read_text(encoding='utf-8'), DSH_USER + readded + integrate.DSH_BLOCK)
+
+
+
+class CursorIntegrationTests(unittest.TestCase):
+    # Cursor 的 hooks.json 是扁平格式（事件 → 命令数组）；只动 CrossPet 自己的条目。全在临时目录里，不碰真的 ~/.cursor
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        self.target = root / 'cursor' / 'hooks.json'
+        self.saved = {'SUPPORT': integrate.SUPPORT}
+        integrate.SUPPORT = root / 'support'
+
+    def tearDown(self):
+        for k, v in self.saved.items():
+            setattr(integrate, k, v)
+        self.tmp.cleanup()
+
+    def merge(self):
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            integrate.merge_cursor_hooks(self.target)
+        return out.getvalue()
+
+    def test_install_keeps_user_hooks_and_is_idempotent(self):
+        mine = {'command': './hooks/format.sh'}
+        integrate.save_json(self.target, {'version': 1, 'hooks': {'afterFileEdit': [mine]}})
+        self.merge()
+        first = integrate.load_json(self.target)
+        self.assertEqual(first['hooks']['afterFileEdit'][0], mine)
+        self.assertTrue(any(integrate.cursor_ours(e) for e in first['hooks']['stop']))
+        self.merge()
+        self.assertEqual(integrate.load_json(self.target), first)
+        # 命令指向运行目录里的桥接脚本：macOS 的 App 不会自己放过去，接入时放
+        self.assertTrue((integrate.SUPPORT / 'crosspet-cursor-bridge.py').is_file())
+
+    def test_uninstall_leaves_only_user_hooks(self):
+        mine = {'command': './hooks/format.sh'}
+        integrate.save_json(self.target, {'version': 1, 'hooks': {'afterFileEdit': [mine]}})
+        self.merge()
+        with contextlib.redirect_stdout(io.StringIO()):
+            integrate.remove_cursor_hooks(self.target)
+        self.assertEqual(integrate.load_json(self.target), {'version': 1, 'hooks': {'afterFileEdit': [mine]}})
+
+    def test_odd_shapes_are_left_alone(self):
+        odd = {'version': 1, 'hooks': {'stop': {'command': 'x'}, 'sessionStart': 'echo hi'}}
+        integrate.save_json(self.target, odd)
+        self.assertIn('不是 Cursor 的钩子格式', self.merge())
+        data = integrate.load_json(self.target)
+        self.assertEqual((data['hooks']['stop'], data['hooks']['sessionStart']), ({'command': 'x'}, 'echo hi'))
+        broken = {'hooks': ['not', 'a', 'dict']}
+        integrate.save_json(self.target, broken)
+        self.merge()
+        with contextlib.redirect_stdout(io.StringIO()):
+            integrate.remove_cursor_hooks(self.target)
+        self.assertEqual(integrate.load_json(self.target), broken)
 
 
 if __name__ == '__main__':

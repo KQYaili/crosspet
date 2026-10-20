@@ -197,6 +197,12 @@ extension App {
         if fm.fileExists(atPath: dsh.path), fm.fileExists(atPath: dshSrc.path) {
             try? fm.removeItem(at: dsh); try? fm.copyItem(at: dshSrc, to: dsh)
         }
+        // Cursor 的桥接脚本：接入时才放进运行目录，放过的跟着 App 更新
+        let bridge = root.appendingPathComponent("crosspet-cursor-bridge.py")
+        let bridgeSrc = res.appendingPathComponent("integrations/cursor/crosspet-cursor-bridge.py")
+        if fm.fileExists(atPath: bridge.path), fm.fileExists(atPath: bridgeSrc.path) {
+            try? fm.removeItem(at: bridge); try? fm.copyItem(at: bridgeSrc, to: bridge)
+        }
         let bundled = res.appendingPathComponent("characters")
         for dir in (try? fm.contentsOfDirectory(atPath: bundled.path)) ?? [] {
             replace(dir, in: charactersDir, from: bundled)
