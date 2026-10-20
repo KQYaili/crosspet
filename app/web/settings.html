@@ -124,8 +124,8 @@ input[type=range] { width: 150px; accent-color: var(--accent); }
     <div class="ctl"><label class="switch"><input type="checkbox" data-key="quotaAggregate"><span></span></label></div></div>
   <div class="item"><div class="label">Codex 重置提醒<small>官方提前宣布重置时，GPT 的额度下方多一行；右键「会重置吗？」可以问她。数据来自第三方网站 <button class="srclink" data-action="openCodexResets">codex-resets.com</button>，根据官方推文整理，预测不是 OpenAI 的承诺</small></div>
     <div class="ctl"><label class="switch"><input type="checkbox" data-key="codexResets"><span></span></label></div></div>
-  <div class="item"><div class="label">额度栏显示峰谷时段<small>DeepSeek、GLM 的额度下面画一条今天的时间条：红色高峰、绿色空闲，竖线是现在（北京时间）。按 DeepSeek 官方 API 和 GLM 编程套餐的规则，其他渠道以各自价格为准；法定节假日暂不识别</small></div>
-    <div class="ctl"><label class="switch"><input type="checkbox" data-key="peakBar"><span></span></label></div></div>
+  <div class="item"><div class="label">额度栏显示峰谷时段<small>DeepSeek、GLM 的额度下面显示现在是高峰还是空闲（北京时间）。时间条：今天 24 小时，红色高峰、绿色空闲，竖线是现在；文字：一行「高峰 · 12:00 转空闲」。按 DeepSeek 官方 API 和 GLM 编程套餐的规则，其他渠道以各自价格为准；法定节假日暂不识别</small></div>
+    <div class="ctl"><div class="seg" id="peakStyle" data-key="peakStyle"><button data-v="bar">时间条</button><button data-v="text">文字</button><button data-v="off">关</button></div></div></div>
   <div id="peakOutfits"></div>
 </div>
 
@@ -189,9 +189,10 @@ function setState(s) {
   if (document.activeElement !== $('textSize')) $('textSize').value = text
   $('textSizeVal').textContent = Math.round(text * 100) + '%'
   showLink(linked)
-  for (const el of document.querySelectorAll('[data-key]')) el.checked = !!s[el.dataset.key]
+  for (const el of document.querySelectorAll('input[data-key]')) el.checked = !!s[el.dataset.key]
   for (const el of document.querySelectorAll('[data-only]')) el.classList.toggle('hidden', s[el.dataset.only] === undefined || s[el.dataset.only] === null)
   for (const b of $('aura').children) b.classList.toggle('on', b.dataset.v === s.aura)
+  for (const b of $('peakStyle').children) b.classList.toggle('on', b.dataset.v === s.peakStyle)
   const sel = $('character')
   // 有别的衣服（皮肤）的角色展开成几项：「DeepSeek · 女仆装」「DeepSeek · Claude 卫衣」（值写成 角色|皮肤）
   sel.replaceChildren(...s.characters.flatMap(c => c.skins
@@ -288,8 +289,9 @@ function renderPeakOutfits(s) {
     return [item]
   }))
 }
-for (const el of document.querySelectorAll('[data-key]')) el.onchange = () => post({ cmd: 'set', key: el.dataset.key, value: el.checked })
+for (const el of document.querySelectorAll('input[data-key]')) el.onchange = () => post({ cmd: 'set', key: el.dataset.key, value: el.checked })
 for (const b of $('aura').children) b.onclick = () => post({ cmd: 'set', key: 'aura', value: b.dataset.v })
+for (const b of $('peakStyle').children) b.onclick = () => post({ cmd: 'set', key: 'peakStyle', value: b.dataset.v })
 for (const b of document.querySelectorAll('[data-action]')) b.onclick = () => post({ cmd: 'action', name: b.dataset.action })
 // 锁链图标：锁着 = 两节扣在一起；解开 = 断开
 const LINK_ON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M6.5 9.5l3-3M7 4.5l1-1a2.5 2.5 0 013.5 3.5l-1 1M9 11.5l-1 1a2.5 2.5 0 01-3.5-3.5l1-1"/></svg>'

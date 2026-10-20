@@ -65,3 +65,13 @@ test('decide：睡眠跨过两段，只按最新一段', () => {
   const k = P.decide(DS, bj('2026-10-19T09:30:00'), ch, null).key
   assert.deepStrictEqual(P.decide(DS, bj('2026-10-19T15:00:00'), ch, k), { key: String(bj('2026-10-19T14:00:00')), kind: 'peak', skin: 'a' })
 })
+
+test('文字款：现在是哪段、几点换到下一段（今天 / 明天 / 周几）', () => {
+  assert.deepStrictEqual(P.statusText(DS, bj('2026-10-19T10:00:00')), { kind: 'peak', text: '高峰 · 12:00 转空闲' })
+  assert.deepStrictEqual(P.statusText(DS, bj('2026-10-19T12:30:00')), { kind: 'valley', text: '空闲 · 14:00 转高峰' })
+  assert.deepStrictEqual(P.statusText(DS, bj('2026-10-19T20:00:00')), { kind: 'valley', text: '空闲 · 明天 9:00 转高峰' })
+  assert.deepStrictEqual(P.statusText(DS, bj('2026-10-20T03:00:00')), { kind: 'valley', text: '空闲 · 9:00 转高峰' })   // 过了半夜就是今天
+  assert.deepStrictEqual(P.statusText(DS, bj('2026-10-23T19:00:00')), { kind: 'valley', text: '空闲 · 周一 9:00 转高峰' })   // 周五晚上
+  assert.deepStrictEqual(P.statusText(DS, bj('2026-10-25T19:00:00')), { kind: 'valley', text: '空闲 · 明天 9:00 转高峰' })   // 周日晚上
+  assert.deepStrictEqual(P.statusText(GLM, bj('2026-10-19T15:00:00')), { kind: 'peak', text: '高峰 · 18:00 转空闲' })
+})

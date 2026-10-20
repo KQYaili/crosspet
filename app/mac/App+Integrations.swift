@@ -207,9 +207,8 @@ extension App {
                 defaults.set(on, forKey: "codexResets"); js("setCodexResets(\(on))")
             case "peakSkins":
                 defaults.set(Self.cleanPeakSkins(value), forKey: "peakSkins"); js("setPeakSkins(\(peakSkinsJSON))")
-            case "peakBar":
-                let on = value as? Bool ?? true
-                defaults.set(on, forKey: "peakBar"); js("setPeakBar(\(on))")
+            case "peakStyle":
+                if let s = value as? String, ["bar", "text", "off"].contains(s) { defaults.set(s, forKey: "peakStyle"); js("setPeakStyle(\(quote(s)))") }
             case "dsQuota":
                 let on = value as? Bool ?? true
                 defaults.set(on, forKey: "dsQuota")

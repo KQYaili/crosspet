@@ -57,7 +57,16 @@
     return { key, kind: p.kind, skin: key !== appliedKey && typeof want === 'string' ? want : null }
   }
 
-  const api = { RULES, periodAt, segments, ticks, nowMinute, decide }
+  // 文字款（设置里「峰谷时段显示：文字」）：「高峰 · 12:00 转空闲」「空闲 · 明天 9:00 转高峰」「空闲 · 周一 9:00 转高峰」
+  const NAME = { peak: '高峰', valley: '空闲' }, WEEK = '日一二三四五六'
+  function statusText(rule, ms) {
+    const p = periodAt(rule, ms), days = Math.round((dayStart(p.until) - dayStart(ms)) / DAY)
+    const t = new Date(p.until + BJ), hm = `${t.getUTCHours()}:${String(t.getUTCMinutes()).padStart(2, '0')}`
+    const when = days === 0 ? '' : days === 1 ? '明天 ' : `周${WEEK[t.getUTCDay()]} `
+    return { kind: p.kind, text: `${NAME[p.kind]} · ${when}${hm} 转${NAME[p.kind === 'peak' ? 'valley' : 'peak']}` }
+  }
+
+  const api = { RULES, periodAt, segments, ticks, nowMinute, decide, statusText }
   root.PeakHours = api
   if (typeof module !== 'undefined') module.exports = api
 })(typeof window !== 'undefined' ? window : globalThis)
