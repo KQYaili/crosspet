@@ -437,6 +437,88 @@ if character in MULTI_MODEL_HOSTS:
 
 arg_event = sys.argv[2] if len(sys.argv) > 2 else ""
 name = event.get("hook_event_name") or arg_event
+
+
+# ---- 按轮次丢掉迟到的事件（Codex：事件带 turn_id；PR #26 @KQYaili 报的）----
+# 一轮结束（Stop / 打断 / 手动 compact 完）后，子任务、工具的事件还会陆续到；上一轮的事件也可能在新的一轮里才到。
+# 不拦的话，她刚开心完又被拉回「思考」，或者正在跑的新一轮被旧事件盖掉。按「会话 + 轮次」记在 <宿主>-turns.json：
+# 结束过的轮次再来的事件直接丢掉；子任务（带 agent_id）跟着主轮次走，主轮次结束了它的事件也丢掉。不带 turn_id 的宿主照旧
+TURN_END = ("Stop", "StopFailure", "Interrupt")
+TURN_KEEP = 24 * 3600
+
+
+def turn_gate(owner: str, sid: str, tid: str, name: str, child: bool) -> bool:
+    """这条事件要不要演。顺便记账（几个钩子可能同时到，用文件锁排队）"""
+    path = state_dir / f"{owner}-turns.json"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    with open(state_dir / f".{owner}-turns.lock", "a+b") as lock:
+        try:
+            if os.name == "nt":
+                import msvcrt
+                lock.seek(0)
+                msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                book = json.loads(path.read_text(encoding="utf-8-sig"))
+                if not isinstance(book, dict):
+                    book = {}
+            except Exception:
+                book = {}
+            now = time.time()
+            book = {k: v for k, v in book.items() if isinstance(v, dict) and now - float(v.get("ts", 0)) < TURN_KEEP}
+            rec = book.get(sid) or {"turn": "", "done": False, "finished": []}
+            finished = rec.get("finished") or []
+            if child:
+                allow = not rec.get("done")   # 主轮次已经结束：子任务迟到的事件
+            elif tid in finished:
+                allow = False                 # 结束过的轮次
+            else:
+                allow = True
+                if tid != rec.get("turn"):
+                    # 新的一轮（发了消息、手动 compact、或第一次见到）：被它取代的上一轮也算结束了（没收到 Stop 也一样）
+                    if rec.get("turn") and rec["turn"] not in finished:
+                        finished = (finished + [rec["turn"]])[-20:]
+                    rec = {"turn": tid, "done": False, "finished": finished}
+                ends = name in TURN_END or (name == "PostCompact" and str(event.get("trigger", "")).lower() == "manual")
+                if ends:
+                    rec["done"] = True
+                    rec["finished"] = (finished + [tid])[-20:]
+            rec["ts"] = now
+            book[sid] = rec
+            tmp = state_dir / f".{owner}-turns.{os.getpid()}.json"
+            tmp.write_text(json.dumps(book))
+            tmp.replace(path)
+            return allow
+        finally:
+            if os.name == "nt":
+                try:
+                    lock.seek(0)
+                    msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+                except Exception:
+                    pass
+
+
+turn_id = str(event.get("turn_id") or "")
+turn_sid = str(event.get("session_id") or "")
+if turn_id and turn_sid:
+    is_child = bool(event.get("agent_id"))
+    try:
+        if not turn_gate(sys.argv[1] if len(sys.argv) > 1 else "claude", turn_sid, turn_id, name, is_child):
+            if arg_event:
+                print("{}")
+            sys.exit(0)
+    except SystemExit:
+        raise
+    except Exception:
+        pass   # 记账出错：照旧演，不能因为这个不动
+    if is_child:
+        # 子任务的第一条消息不是你发的消息；子任务停下也不等于这一轮结束
+        if name == "UserPromptSubmit":
+            name = "SubagentStart"
+        elif name in TURN_END:
+            name = "SubagentStop"
 call = event.get("toolCall") if isinstance(event.get("toolCall"), dict) else {}  # Antigravity
 tool = str(event.get("tool_name") or call.get("name", "")).lower()
 tool_input = json.dumps(event.get("tool_input") or call.get("args", ""), ensure_ascii=False).lower()

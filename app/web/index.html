@@ -683,6 +683,10 @@ function greetDue(id) {
 function setCharacter(id, quiet) {
   if (egg) { clearEggTimers(); egg = null; charId = null }
   if (!manifest.characters[id] || manifest.characters[id].egg || id === charId) return
+  // 上一个角色还没跑完的定时动作（听完转思考、工具结束回思考、排队等着换的动作、演完回待机）全部作废：
+  // 不然会落到换上来的角色身上——她明明闲着，却突然开始思考 / 写东西（PR #26 @KQYaili 报的「串台」）
+  const dropTimers = () => { clearTimeout(thinkTimer); clearTimeout(pending); clearTimeout(revertTimer); clearTimeout(stuckTimer) }
+  dropTimers()
   if (multi) { const m = multi; multi = null; clearInterval(m.flipTimer); clearTimeout(m.recheck); clearTimeout(m.chatter); clearTimeout(m.sayTimer); for (const c of m.cards.values()) c.el.remove(); $('more').classList.remove('on') }
   setTimeout(refreshMulti, 700)   // 换过去的角色如果也有好几个对话在干活，接着演
   setTimeout(preloadEdges, 900)
@@ -690,6 +694,7 @@ function setCharacter(id, quiet) {
   const p = $('poof'); p.classList.remove('go'); void p.offsetWidth; p.classList.add('go')
   stage.classList.add('swap')
   setTimeout(() => {
+    dropTimers()   // 冒烟这 0.33 秒里，上一个角色的事件可能又排了新的
     charId = id; pose = null; currentUrl = ''
     const c = char()
     applyLook(c)
@@ -698,6 +703,8 @@ function setCharacter(id, quiet) {
     const s = charState[id]
     const busy = s && Date.now() / 1000 - s.ts < 60 && !TRANSIENT[s.pose] && s.pose !== 'idle'
     setPose(busy ? s.pose : restPose(), true)
+    if (busy) watchStuck()   // 接着演她自己的活：卡住兜底按她自己的时间重新算
+    if (busy && s.pose === 'listening') thinkTimer = setTimeout(() => { if (charId === id) show('thinking') }, LISTEN_TO_THINKING)
     // 这个时段 / 节日还没打过招呼：演专属的登场动作；打过了就用平常那句（30 分钟冷却）
     if (quiet) say('')
     else if (!timeGreet(id, busy)) say(greetDue(id) ? (c.greeting || `${c.name} 在这儿～`) : '')
