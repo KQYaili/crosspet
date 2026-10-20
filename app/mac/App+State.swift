@@ -44,7 +44,7 @@ extension App {
                 }
             }
         }
-        if followEvents, !pauseRealEvents, let id = latestActive.id, id != currentId { switchTo(id) }
+        if followEvents, !pauseRealEvents, let id = latestActive.id, id != currentId { followEvent(id) }
         applyLayer()
         updateDock()
         // 多模型宿主（DeepSeek Harness、WorkBuddy、ZCode，以及接了别家接口的 Claude Code、Codex）正在前台、
@@ -58,6 +58,25 @@ extension App {
                   (appToCharacter[front] ?? hostApp(front)) == host else { continue }
             let id = hostCharacter(host)
             if id != currentId, characterIds.contains(id) { switchTo(id) }
+        }
+    }
+
+    /// 两端使用网页层同一份优先级；这里只采集前台程序及设置并执行结果。
+    func followEvent(_ id: String) {
+        let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let host = front.flatMap { appToCharacter[$0] ?? hostApp($0) }
+        let foregroundId = host.map { hostCharacter($0) }
+        let currentAt = currentId, apps = followApps, events = followEvents
+        let input: [String: Any] = ["eventId": id, "foregroundId": foregroundId as Any? ?? NSNull(),
+                                    "followApps": apps, "followEvents": events, "characters": characterIds]
+        guard let data = try? JSONSerialization.data(withJSONObject: input), let json = String(data: data, encoding: .utf8) else { return }
+        web.evaluateJavaScript("FollowPolicy.eventTarget(\(json))") { [weak self] result, _ in
+            // 和 Windows 一致：前台、设置或手动选择变了就丢弃旧答复。
+            guard let self, self.ready, !self.pauseRealEvents, self.currentId == currentAt,
+                  NSWorkspace.shared.frontmostApplication?.bundleIdentifier == front,
+                  self.followApps == apps, self.followEvents == events,
+                  result as? String == id, id != self.currentId else { return }
+            self.switchTo(id)
         }
     }
 
