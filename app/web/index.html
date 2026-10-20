@@ -104,10 +104,10 @@ html.no-name #caption { display: none; }
 #quota .notice { color: #6b4a3a; font-weight: 600; }   /* 重置提醒那一行：不跟着额度紧张变红 */
 /* 峰谷时段（设置里选款式）。时间条：一天 24 小时，红 = 高峰、绿 = 空闲，竖线 = 现在（北京时间）；颜色要够深，浅色桌面上也看得清 */
 #quota .peak { padding: calc(2px * var(--k)) 0 0; }
-#quota .peakbar { position: relative; width: calc(150px * var(--k)); height: calc(6px * var(--k)); margin: 0 auto; border-radius: calc(3px * var(--k)); overflow: hidden; background: #4fae69; box-shadow: inset 0 0 0 calc(.5px * var(--k)) rgba(74,36,24,.35); }
+#quota .peakbar { position: relative; width: calc(150px * var(--k)); height: calc(6px * var(--k)); margin: 0 auto; border-radius: calc(3px * var(--k)); overflow: hidden; background: #7cc493; box-shadow: inset 0 0 0 calc(.5px * var(--k)) rgba(74,36,24,.35); }
 #quota .peakbar i { position: absolute; top: 0; bottom: 0; }
-#quota .peakbar i.peak-on { background: #e0503f; }
-#quota .peakbar i.valley-on { background: #4fae69; }
+#quota .peakbar i.peak-on { background: #ec8174; }
+#quota .peakbar i.valley-on { background: #7cc493; }
 #quota .peaknow { position: absolute; top: calc(-1px * var(--k)); width: calc(150px * var(--k)); left: 50%; margin-left: calc(-75px * var(--k)); height: calc(8px * var(--k)); pointer-events: none; }
 #quota .peaknow b { position: absolute; top: 0; bottom: 0; width: calc(2px * var(--k)); margin-left: calc(-1px * var(--k)); background: #3a2219; border-radius: 1px; box-shadow: 0 0 0 calc(1px * var(--k)) #fff; }
 #quota .peakwrap { position: relative; }
@@ -115,10 +115,10 @@ html.no-name #caption { display: none; }
 #quota .peakticks span { position: absolute; top: 0; transform: translateX(-50%); }
 #quota .peakticks span:first-child { transform: none; }
 #quota .peakticks span:last-child { transform: translateX(-100%); }
-/* 文字款：一行「● 高峰 · 12:00 转空闲」 */
+/* 文字款：一行「● 高峰」或「● 空闲」 */
 #quota .peaktext { font-weight: 600; }
-#quota .peaktext.peak-on { color: #c8372a; }
-#quota .peaktext.valley-on { color: #2f8a4a; }
+#quota .peaktext.peak-on { color: #dc5f51; }
+#quota .peaktext.valley-on { color: #4aa265; }
 #quota .peaktext::before { content: ''; display: inline-block; width: calc(7px * var(--k)); height: calc(7px * var(--k)); margin-right: calc(4px * var(--k)); border-radius: 50%; background: currentColor; vertical-align: calc(.5px * var(--k)); }
 /* 额度合并显示：一家 AI 一行，名字一列、每个额度窗口一列（quota-aggregate.js），只有紧张的百分比变红 */
 #quota.agg:not(:empty) { display: grid; justify-content: center; text-align: left; font-variant-numeric: tabular-nums; }
