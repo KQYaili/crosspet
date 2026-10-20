@@ -92,6 +92,11 @@ namespace CrossPet
             try { var web = Path.Combine(Data, "web"); if (Directory.Exists(web)) Directory.Delete(web, true); } catch { }
             var hook = Path.Combine(Install, "integrations", "crosspet-hook.py");
             if (File.Exists(hook)) File.Copy(hook, Path.Combine(Data, "crosspet-hook.py"), true);
+            // Cursor 的桥接脚本：接入时才复制到数据目录，复制过的跟着程序更新
+            var bridge = Path.Combine(Install, "integrations", "cursor", "crosspet-cursor-bridge.py");
+            var bridgeCopy = Path.Combine(Data, "crosspet-cursor-bridge.py");
+            if (File.Exists(bridge) && File.Exists(bridgeCopy))
+                try { File.Copy(bridge, bridgeCopy, true); } catch (Exception e) { Log("更新 Cursor 桥接脚本失败: " + e.Message); }
             if (!File.Exists(AppMap)) File.Copy(Path.Combine(Install, "apps.json"), AppMap);
             else
             {

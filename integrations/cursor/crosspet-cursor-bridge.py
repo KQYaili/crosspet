@@ -3,17 +3,30 @@ import contextlib
 import ctypes
 import hashlib
 import json
-import msvcrt
 import os
 from pathlib import Path
 import sys
 import time
 
+if os.name == 'nt':
+    import msvcrt
+else:
+    import fcntl
+    import select
+
 # The mascot is an argument, same as crosspet-hook.py. Cursor does not pick one.
 CHARACTER = sys.argv[1] if len(sys.argv) > 1 else 'grok'
 
-ROOT = Path(os.environ.get('CROSSPET_DATA_DIR') or Path(os.environ['LOCALAPPDATA']) / 'CrossPet')
-STATE = Path(os.environ.get('CROSSPET_STATE_DIR') or ROOT / 'state')
+# Same folders as crosspet-hook.py and the shells: the macOS pet reads /tmp/crosspet.
+if os.name == 'nt':
+    ROOT = Path(os.environ.get('CROSSPET_DATA_DIR') or Path(os.environ['LOCALAPPDATA']) / 'CrossPet')
+    STATE = Path(os.environ.get('CROSSPET_STATE_DIR') or ROOT / 'state')
+else:
+    ROOT = Path(os.environ.get('CROSSPET_DATA_DIR') or Path.home() / 'Library/Application Support/CrossPet')
+    STATE = Path(os.environ.get('CROSSPET_STATE_DIR') or '/tmp/crosspet')
+BIG_JOB_TOOLS = 8  # Same as crosspet-hook.py: a turn with this many tools ends 'proud'.
+# Poses that mean a conversation is not working right now.
+RESTING = ('idle', 'happy', 'proud', 'oops', 'surprised')
 OBSERVERS = ('sessionStart', 'sessionEnd', 'postToolUse', 'postToolUseFailure',
              'afterShellExecution', 'afterMCPExecution', 'afterFileEdit',
              'afterAgentThought', 'afterAgentResponse', 'subagentStop', 'preCompact', 'stop')
@@ -21,6 +34,8 @@ OBSERVERS = ('sessionStart', 'sessionEnd', 'postToolUse', 'postToolUseFailure',
 
 def read_event():
     """Parse one complete UTF-8 JSON object without waiting for pipe EOF."""
+    if os.name != 'nt':
+        return read_event_posix()
     import msvcrt
     from ctypes import wintypes
     handle = msvcrt.get_osfhandle(sys.stdin.fileno())
@@ -39,6 +54,27 @@ def read_event():
         else:
             time.sleep(.005)
             continue
+        if not chunk:
+            break
+        buffer += chunk
+        if buffer.rstrip().endswith(b'}'):
+            try:
+                return json.loads(buffer.decode('utf-8-sig'))
+            except (ValueError, UnicodeDecodeError):
+                pass
+    return json.loads(buffer.decode('utf-8-sig'))
+
+
+def read_event_posix():
+    """macOS: the same read, waiting with select instead of PeekNamedPipe."""
+    fd = sys.stdin.fileno()
+    buffer = b''
+    end = time.monotonic() + 0.6
+    while len(buffer) < 4 * 1024 * 1024:
+        wait = end - time.monotonic()
+        if wait <= 0 or not select.select([fd], [], [], wait)[0]:
+            break
+        chunk = os.read(fd, 65536)
         if not chunk:
             break
         buffer += chunk
@@ -78,7 +114,10 @@ def locked():
         while True:
             lock.seek(0)
             try:
-                msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+                if os.name == 'nt':
+                    msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 break
             except OSError:
                 if time.monotonic() >= until:
@@ -88,7 +127,10 @@ def locked():
             yield
         finally:
             lock.seek(0)
-            msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+            if os.name == 'nt':
+                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 def tool_pose(name):
@@ -200,6 +242,16 @@ def handle(event):
                 orders[sid] = entry
                 atomic(order_path, orders)
             return
+        # Tools used in this turn. postToolUse / postToolUseFailure fire for every tool,
+        # so the after* hooks that repeat the same call are not counted again.
+        tools = 0 if entry.get('terminal') else int(entry.get('tools', 0) or 0)
+        if kind == 'stop':
+            if activity['pose'] == 'happy' and tools >= BIG_JOB_TOOLS:
+                activity['pose'] = 'proud'
+            tools = 0
+        elif kind in ('postToolUse', 'postToolUseFailure'):
+            tools += 1
+        updated['tools'] = tools
         orders[sid] = updated
         orders = dict(sorted(orders.items(), key=lambda kv: kv[1].get('ts', 0))[-128:])
         if kind == 'sessionEnd':
@@ -208,7 +260,7 @@ def handle(event):
             sessions[sid] = {'generation': generation, 'state': activity}
         sessions = dict(sorted(sessions.items(), key=lambda kv: kv[1]['state']['ts'])[-32:])
         active = [entry['state'] for entry in sessions.values()
-                  if entry['state']['pose'] not in ('idle', 'happy', 'oops', 'surprised')
+                  if entry['state']['pose'] not in RESTING
                   and now - entry['state']['ts'] < 180]
         if active:
             activity = max(active, key=lambda state: state['ts'])
@@ -219,12 +271,27 @@ def handle(event):
             pass
         atomic(order_path, orders)
         atomic(path, sessions)
-        atomic(STATE / f'{CHARACTER}-sessions.json', {k: {field: value['state'][field] for field in ('pose', 'event', 'ts')}
-                                            for k, value in sessions.items()})
+        write_cards(sessions, now)
         atomic(STATE / 'cursor-host.json', {'character': CHARACTER, 'source': 'cursor', 'ts': now})
         atomic(STATE / f'{CHARACTER}-state.json', activity)
         atomic(STATE / 'cursor-bridge-status.json', {'installed': True, 'last_event': kind,
                'artwork_ready': any((ROOT / 'characters' / CHARACTER / ('idle.' + ext)).is_file() for ext in ('png', 'webp')), 'ts': now})
+
+
+def write_cards(sessions, now):
+    """<character>-sessions.json drives the pet's per-conversation cards. Other integrations can
+    write the same file (crosspet-hook.py for a Grok model in another app), so only the
+    cursor_ entries are replaced. A card shows the tool being used, like crosspet-hook.py."""
+    path = STATE / f'{CHARACTER}-sessions.json'
+    others = {k: v for k, v in _load_dict(path).items()
+              if not k.startswith('cursor_') and isinstance(v, dict)
+              and isinstance(v.get('ts'), (int, float)) and now - v['ts'] < 600}
+    cards = {}
+    for k, value in sessions.items():
+        state = value['state']
+        pose = state.get('after') or state['pose'] if state['pose'] == 'thinking' else state['pose']
+        cards[k] = {'pose': pose, 'event': state['event'], 'ts': state['ts']}
+    atomic(path, {**others, **cards})
 
 
 def main():

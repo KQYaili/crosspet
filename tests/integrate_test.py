@@ -161,5 +161,59 @@ class DeepSeekPatchTests(unittest.TestCase):
         self.assertEqual(self.patch.read_text(encoding='utf-8'), DSH_USER + readded + integrate.DSH_BLOCK)
 
 
+
+class CursorIntegrationTests(unittest.TestCase):
+    # Cursor 的 hooks.json 是扁平格式（事件 → 命令数组）；只动 CrossPet 自己的条目。全在临时目录里，不碰真的 ~/.cursor
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        self.target = root / 'cursor' / 'hooks.json'
+        self.saved = {'SUPPORT': integrate.SUPPORT}
+        integrate.SUPPORT = root / 'support'
+
+    def tearDown(self):
+        for k, v in self.saved.items():
+            setattr(integrate, k, v)
+        self.tmp.cleanup()
+
+    def merge(self):
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            integrate.merge_cursor_hooks(self.target)
+        return out.getvalue()
+
+    def test_install_keeps_user_hooks_and_is_idempotent(self):
+        mine = {'command': './hooks/format.sh'}
+        integrate.save_json(self.target, {'version': 1, 'hooks': {'afterFileEdit': [mine]}})
+        self.merge()
+        first = integrate.load_json(self.target)
+        self.assertEqual(first['hooks']['afterFileEdit'][0], mine)
+        self.assertTrue(any(integrate.cursor_ours(e) for e in first['hooks']['stop']))
+        self.merge()
+        self.assertEqual(integrate.load_json(self.target), first)
+        # 命令指向运行目录里的桥接脚本：macOS 的 App 不会自己放过去，接入时放
+        self.assertTrue((integrate.SUPPORT / 'crosspet-cursor-bridge.py').is_file())
+
+    def test_uninstall_leaves_only_user_hooks(self):
+        mine = {'command': './hooks/format.sh'}
+        integrate.save_json(self.target, {'version': 1, 'hooks': {'afterFileEdit': [mine]}})
+        self.merge()
+        with contextlib.redirect_stdout(io.StringIO()):
+            integrate.remove_cursor_hooks(self.target)
+        self.assertEqual(integrate.load_json(self.target), {'version': 1, 'hooks': {'afterFileEdit': [mine]}})
+
+    def test_odd_shapes_are_left_alone(self):
+        odd = {'version': 1, 'hooks': {'stop': {'command': 'x'}, 'sessionStart': 'echo hi'}}
+        integrate.save_json(self.target, odd)
+        self.assertIn('不是 Cursor 的钩子格式', self.merge())
+        data = integrate.load_json(self.target)
+        self.assertEqual((data['hooks']['stop'], data['hooks']['sessionStart']), ({'command': 'x'}, 'echo hi'))
+        broken = {'hooks': ['not', 'a', 'dict']}
+        integrate.save_json(self.target, broken)
+        self.merge()
+        with contextlib.redirect_stdout(io.StringIO()):
+            integrate.remove_cursor_hooks(self.target)
+        self.assertEqual(integrate.load_json(self.target), broken)
+
+
 if __name__ == '__main__':
     unittest.main()

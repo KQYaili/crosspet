@@ -811,10 +811,11 @@ CURSOR_HOOKS = HOME / ".cursor" / "hooks.json"
 
 def load_cursor_template() -> dict:
     data = load_json(REPO / "integrations/cursor/hooks.json")
-    if os.name != "nt":
-        return data
+    # 模板里的命令指向运行目录里的桥接脚本：两边都在这里放进去（macOS 的 App 不会自己放），之后跟着 App 更新
     SUPPORT.mkdir(parents=True, exist_ok=True)
     shutil.copy2(REPO / "integrations/cursor/crosspet-cursor-bridge.py", SUPPORT / "crosspet-cursor-bridge.py")
+    if os.name != "nt":
+        return data
     prefix = f"{win_arg(Path(sys.executable))} {win_arg(SUPPORT / 'crosspet-cursor-bridge.py')}"
     original = 'python3 "$HOME/Library/Application Support/CrossPet/crosspet-cursor-bridge.py"'
 
@@ -838,11 +839,18 @@ def cursor_ours(entry) -> bool:
 
 def merge_cursor_hooks(target: Path) -> None:
     data = load_json(target)
+    if not isinstance(data, dict) or not isinstance(data.setdefault("hooks", {}), dict):
+        print(f"  ！{target} 不是 Cursor 的钩子格式（顶层要是 {{\"hooks\": {{...}}}}），没有改")
+        return
     data.setdefault("version", 1)
-    hooks = data.setdefault("hooks", {})
+    hooks = data["hooks"]
     for event, entries in load_cursor_template()["hooks"].items():
-        current = hooks.get(event, [])
-        if current and isinstance(current[0], dict) and "hooks" in current[0] and "command" not in current[0]:
+        current = hooks.get(event)
+        if current is None:
+            current = []
+        # 每个事件应该是命令数组；不是的（别的格式、写坏了的）不动，免得把你的配置改乱
+        if not isinstance(current, list) or (
+                current and isinstance(current[0], dict) and "hooks" in current[0] and "command" not in current[0]):
             print(f"  ！{target} 的 {event} 不是 Cursor 的钩子格式，这一项没有改")
             continue
         hooks[event] = [entry for entry in current if not cursor_ours(entry)] + entries
@@ -855,7 +863,9 @@ def remove_cursor_hooks(target: Path) -> None:
     if not target.exists():
         return
     data = load_json(target)
-    hooks = data.get("hooks", {})
+    hooks = data.get("hooks") if isinstance(data, dict) else None
+    if not isinstance(hooks, dict):
+        return
     changed = False
     for event in list(hooks):
         current = hooks.get(event)
@@ -878,6 +888,8 @@ def has_cursor() -> bool:
     try:
         hooks = load_json(CURSOR_HOOKS).get("hooks", {})
     except Exception:
+        return False
+    if not isinstance(hooks, dict):
         return False
     return any(cursor_ours(entry) for entries in hooks.values() if isinstance(entries, list) for entry in entries)
 
