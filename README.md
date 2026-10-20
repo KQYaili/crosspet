@@ -48,7 +48,7 @@
 | **Hermes Agent**（Nous Research，多模型） | ✅ 按当前模型 | ✅ 插件 | — |
 | **Qwen**（阿里 Qwen Code，多模型） | ✅ 按当前模型 | ✅ 钩子（未实测） | — |
 
-DeepSeek Harness、WorkBuddy、ZCode、Hermes Agent、Qwen Code 里都能用好几家的模型：换成哪家的模型，她就换成哪家的角色；Claude Code 走别家的兼容接口（比如 DeepSeek、智谱）、Codex 换成别家模型时也一样（按模型名和 Claude Code 的接口地址判断，认不出的还是 Claude / GPT 自己）；没有对应角色的模型（混元、Kimi、Hermes 自家模型……）由当前角色来演。千问角色已内置立绘。**千问的局限**：只有 Qwen Code 能接入；千问桌面客户端没有对外接口，她跟不了它干活。Qwen Code 的接入是按官方文档做的，还没在真实环境里完整测过，遇到问题欢迎提 issue。ZCode 和 WorkBuddy 的额度 / 积分只能拿你的登录凭据去问服务器，CrossPet 不碰凭据，所以不显示。Gemini 桌面版没有对外接口，切过去只会换形象；Antigravity 的桌面版和命令行都能跟着干活。「等你回答」目前认 Claude Code、DeepSeek Harness、ZCode 和 Hermes Agent：Codex 提问时不触发钩子，Antigravity 没有提问的信号。
+DeepSeek Harness、WorkBuddy、ZCode、Hermes Agent、Qwen Code 里都能用好几家的模型：换成哪家的模型，她就换成哪家的角色；Claude Code 走别家的兼容接口（比如 DeepSeek、智谱）、Codex 换成别家模型时也一样（按模型名和 Claude Code 的接口地址判断，认不出的还是 Claude / GPT 自己）；没有对应角色的模型（混元、Kimi、Hermes 自家模型……）由当前角色来演。千问角色已内置立绘。**千问的局限**：只有 Qwen Code 能接入；千问桌面客户端没有对外接口，她跟不了它干活。Qwen Code 的接入还没在真实环境里完整测过（干活时的事件要登录才能触发），遇到问题欢迎提 issue。ZCode 和 WorkBuddy 的额度 / 积分只能拿你的登录凭据去问服务器，CrossPet 不碰凭据，所以不显示。Gemini 桌面版没有对外接口，切过去只会换形象；Antigravity 的桌面版和命令行都能跟着干活。「等你回答」目前认 Claude Code、DeepSeek Harness、ZCode 和 Hermes Agent：Codex 提问时不触发钩子，Antigravity 没有提问的信号。
 
 ## 快速开始
 
