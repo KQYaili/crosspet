@@ -36,7 +36,6 @@ namespace CrossPet
             Environment.Exit(0);
         }
 
-        [STAThread]
         /// <summary>安装目录缺东西（#24：上次一键更新删到一半）时不往下走——不然每次启动都崩、用户只看到「打不开」。
         /// 找得到下载好的完整安装包就问要不要用它修复，找不到就指去发布页重新下载</summary>
         static bool InstallComplete()
@@ -63,6 +62,8 @@ namespace CrossPet
             return false;
         }
 
+        // [STAThread] 必须紧挨着 Main：WPF 和 WebView2 都要求主线程是 STA（中间插了别的函数，Main 就成了 MTA，启动报 RPC_E_CHANGED_MODE）
+        [STAThread]
         static void Main()
         {
             // 只开一个：再次打开时让已经在跑的那个回到右下角
