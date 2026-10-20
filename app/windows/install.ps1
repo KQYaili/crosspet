@@ -24,8 +24,10 @@ try {
     if ([IO.Path]::GetFullPath($PSScriptRoot) -ne [IO.Path]::GetFullPath($destination)) {
         # 接入的 AI（Codex、DeepSeek Harness……）每次调钩子都会用 Programs\CrossPet\python\python.exe 跑一下 crosspet-hook.py，一两秒就结束。
         # 它们在跑时这些文件删不掉、目录也改不了名（#24）：先等它们退出，等 10 秒还在就结束掉（只少记一个事件）
-        function OurProcesses { @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($destination + '\', [StringComparison]::OrdinalIgnoreCase) }) }
-        for ($i = 0; $i -lt 20 -and (OurProcesses).Count -gt 0; $i++) { Start-Sleep -Milliseconds 500 }
+        # 只查会从安装目录里跑起来的几个程序名：读全部进程的路径在 Windows 上一次就要一秒多，按次数算的「10 秒」会拖成半分钟（test.5 实测 37 秒）
+        function OurProcesses { @(Get-Process -Name python, pythonw, CrossPet -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($destination + '\', [StringComparison]::OrdinalIgnoreCase) }) }
+        $deadline = (Get-Date).AddSeconds(10)
+        while ((OurProcesses).Count -gt 0 -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
         $busy = OurProcesses
         if ($busy.Count -gt 0) { Say "结束占用安装目录的进程：$(($busy | ForEach-Object { $_.Name + ' ' + $_.Id }) -join '，')"; $busy | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 500 }
 
