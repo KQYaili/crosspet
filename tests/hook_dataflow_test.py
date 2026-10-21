@@ -54,6 +54,12 @@ class HookDataflowTest(unittest.TestCase):
 
     def test_cursor_running_claude_hooks_writes_nothing(self):
         # Cursor 默认也跑 Claude Code 的钩子；Cursor 有自己的接入，这里什么都不写（心跳也不算 Claude 的）
+        home = Path(self.temp.name) / "home"
+        cursor = home / ".cursor"
+        cursor.mkdir(parents=True)
+        (cursor / "hooks.json").write_text(json.dumps({"hooks": {"postToolUse": [
+            {"command": "python crosspet-cursor-bridge.py gpt"}]}}), encoding="utf-8")
+        self.env.update(HOME=str(home), USERPROFILE=str(home))
         self.run_hook({"hook_event_name": "PreToolUse", "conversation_id": "c1", "generation_id": "g1",
                        "cursor_version": "2.0.0", "tool_name": "Shell", "model": "gpt-5"})
         self.assertEqual(sorted(p.name for p in self.state.iterdir()), [])

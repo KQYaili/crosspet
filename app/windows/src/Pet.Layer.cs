@@ -27,7 +27,7 @@ namespace CrossPet
         static string LayerMode => Store.Settings.TryGetValue("layer", out var v) && v is string s && (s == "ai" || s == "normal") ? s : "always";
         static bool HideFullscreen => !(Store.Settings.TryGetValue("hideFullscreen", out var v) && v is bool b && !b);
         readonly Dictionary<string, (string pose, DateTime at)> lastPose = new Dictionary<string, (string, DateTime)>();
-        bool frontIsAI, hiddenForFullscreen;
+        bool frontIsAI, frontIsShell, hiddenForFullscreen;
 
         bool AIActive()
         {
@@ -89,15 +89,15 @@ namespace CrossPet
         {
             if (Window == null || hwnd == IntPtr.Zero) return;
             if (userHidden) return;   // 你用快捷键藏起来了：什么都别把她翻出来
-            // 全屏时隐藏
-            var hide = HideFullscreen && !fullscreenOverride && Native.InFullscreen(hwnd);
+            // 全屏时隐藏；全屏的是 AI 程序（对照表里有的，专心和 AI 干活）照常显示，和 macOS 一致
+            var hide = HideFullscreen && !fullscreenOverride && !frontIsAI && Native.InFullscreen(hwnd);
             if (hide != hiddenForFullscreen)
             {
                 hiddenForFullscreen = hide;
                 Store.Log(hide ? $"全屏中，先藏起来（前台 {Native.ForegroundExe()}）" : "退出全屏，出来了");
                 SetConcealed(hide);
             }
-            var top = LayerMode == "always" || (LayerMode == "ai" && AIActive());
+            var top = ZOrderRule.Top(LayerMode, LayerMode == "ai" && AIActive(), frontIsShell);   // 「跟着 AI」时前台是桌面也置顶（见 ZOrderRule.Top）
             if (Window.Topmost == top || surfacing) return;
             // 原本被别的窗口挡着、要浮上来：先藏起来，换完层级再淡入（没被挡住就直接换，免得闪一下）
             if (top && !hiddenForFullscreen && Native.Covered(hwnd)) { _ = Surface(); return; }

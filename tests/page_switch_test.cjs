@@ -108,7 +108,7 @@ function makePage() {
   ctx.globalThis = ctx
   vm.createContext(ctx)
   vm.runInContext('Math.random = () => 0.99', ctx)   // 不随机出闲时小动作、彩蛋
-  for (const f of ['effects.js', 'text-size.js', 'codex-quota.js', 'quota-aggregate.js', 'plugin-update.js', 'stand-in.js', 'codex-resets.js', 'whats-new.js'])
+  for (const f of ['effects.js', 'text-size.js', 'codex-quota.js', 'quota-aggregate.js', 'plugin-update.js', 'stand-in.js', 'follow-policy.js', 'codex-resets.js', 'peak-hours.js', 'whats-new.js'])
     vm.runInContext(fs.readFileSync(path.join(WEB, f), 'utf8'), ctx, { filename: f })
   const html = fs.readFileSync(path.join(WEB, 'index.html'), 'utf8').replace(/\r\n/g, '\n')
   const start = html.lastIndexOf('<script>\n'), end = html.lastIndexOf('</script>')
@@ -157,6 +157,45 @@ async function fresh() {
 function assert(c, msg) { if (!c) throw Error(msg) }
 
 const cases = [
+  ['async_reset_answer_is_cancelled_after_switching_away_and_back', async e => {
+    e.run(`resetsOn=true; devResetsSaved={}; var __resetAnswers=0; tellReset=()=>{__resetAnswers++}; void askReset()`)
+    await e.advance(100)
+    e.run(`setCharacter('claude',true)`)
+    await e.advance(100)
+    e.run(`setCharacter('gpt',true)`)
+    await e.advance(1500)
+    assert(e.run('__resetAnswers')===0, 'obsolete asynchronous reset response changed a new GPT display')
+  }],
+  ['peak_outfit_change_treats_pending_character_switch_as_busy', async e => {
+    assert(!e.run('peakBusy()'), 'precondition: idle page is not busy')
+    e.run(`setCharacter('claude',true)`)
+    assert(e.run('peakBusy()'), 'peak outfit migration could run during character swap')
+    await e.advance(1000)
+    assert(!e.run('peakBusy()'), 'completed quiet switch left peak outfit migration busy')
+  }],
+  ['old_outfit_speech_does_not_survive_new_display_generation', async e => {
+    e.run(`manifest.characters.gpt.skin='sleep'; manifest.characters.gpt.lines.peakStart=['old outfit']; outfitLine={id:'gpt',skin:'sleep',key:'peakStart',at:Date.now()}; refreshLook('gpt')`)
+    await e.advance(400)
+    e.run(`setCharacter('claude',true)`)
+    await e.advance(100)
+    e.run(`setCharacter('gpt',true)`)
+    await e.advance(1000)
+    assert(e.state().charId==='gpt' && e.state().bubble!=='old outfit', `old peak outfit speech crossed display generation: ${JSON.stringify(e.state())}`)
+  }],
+  ['cancel_pending_switch_back_keeps_stage_visible', async e => {
+    e.run(`setCharacter('claude')`)
+    await e.advance(100)
+    e.run(`setCharacter('gpt',true)`)
+    await e.advance(2000)
+    assert(e.state().charId==='gpt' && !e.state().stageHidden, `return switch hid current character: ${JSON.stringify(e.state())}`)
+  }],
+  ['repeated_foreground_poll_does_not_postpone_switch_forever', async e => {
+    for (let i=0;i<10;i++) {
+      e.run(`setCharacter('claude',true)`)
+      await e.advance(300)
+    }
+    assert(e.state().charId==='claude' && !e.state().stageHidden, `repeated polling starves switch: ${JSON.stringify(e.state())}`)
+  }],
   ['sessions_during_switch_do_not_juggle_the_new_character', async e => {
     e.run(`setSessions('gpt', sess(['s1','writing'],['s2','reading']))`)
     await e.advance(2000)

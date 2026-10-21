@@ -16,7 +16,7 @@ export const name = "crosspet";
 export const inject = ["credentials"];
 
 const ID = "deepseek";
-const PLUGIN_VERSION = "1.3.5";  // 出现在 deepseek-plugin.json 里，用来确认跑的是哪一版插件
+const PLUGIN_VERSION = "1.3.8";  // 出现在 deepseek-plugin.json 里，用来确认跑的是哪一版插件
 const BIG_JOB_TOOLS = 8;
 const BALANCE_EVERY_MS = 60 * 1000;   // 定时查余额：充了值、没再对话，最多等 1 分钟（以前 10 分钟，用户充值后半天没变）。只是要一次账户余额，不耗 token
 
@@ -41,6 +41,7 @@ function characterFor(provider, model, custom = {}) {
   for (const s of [m.toLowerCase(), p.toLowerCase()]) {
     if (/deepseek/.test(s)) return "deepseek";
     if (/glm|zhipu|bigmodel|chatglm|z-ai|zai-/.test(s)) return "glm";
+    if (/qwen|dashscope|bailian|tongyi/.test(s)) return "qwen";
     if (/claude|anthropic/.test(s)) return "claude";
     if (/gemini|google|vertex/.test(s)) return "gemini";
     if (/gpt|codex|openai|chatgpt|(^|[^a-z])o[1-9]/.test(s)) return "gpt";
@@ -341,9 +342,14 @@ export function apply(ctx, config = {}) {
       ctx.logger?.warn?.(`crosspet: 查余额失败 ${String(e?.message ?? e)}`);
     }
   }
+  // 定时查的间隔：插件配置里的 balanceIntervalMs，0 = 不定时查（只在启动、发消息、一轮结束时查），
+  // 不写或写错（不是数、负数）按默认每分钟。常开着 Harness、人又不在时可以调慢或关掉（#29，@mkinnqijn）
+  const every = config.balanceIntervalMs;
+  const balanceInterval = typeof every === "number" && Number.isFinite(every) && every >= 0 ? every : BALANCE_EVERY_MS;
   ctx.effect(() => {
     pollBalance();
-    const timer = setInterval(pollBalance, BALANCE_EVERY_MS);
+    if (balanceInterval === 0) return () => {};
+    const timer = setInterval(pollBalance, balanceInterval);
     return () => clearInterval(timer);
   }, "crosspet: balance timer");
 }

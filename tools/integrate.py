@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """把 CrossPet 接入各个 AI（或撤销）。install.sh / uninstall.sh 调用它，也可以单独用：
 
-    python3 tools/integrate.py install   claude-hooks | claude-mod | codex | deepseek | gemini | antigravity | workbuddy | zcode | hermes | cursor
-    python3 tools/integrate.py uninstall claude-hooks | claude-mod | codex | deepseek | gemini | antigravity | workbuddy | zcode | hermes | cursor
+    python3 tools/integrate.py install   claude-hooks | claude-mod | codex | deepseek | gemini | antigravity | workbuddy | zcode | hermes | qwen | cursor
+    python3 tools/integrate.py uninstall claude-hooks | claude-mod | codex | deepseek | gemini | antigravity | workbuddy | zcode | hermes | qwen | cursor
     python3 tools/integrate.py status
 
 原则：
@@ -676,6 +676,24 @@ def gemini(install: bool) -> None:
         remove_hooks(GEMINI_SETTINGS)
 
 
+# ---- Qwen Code（阿里）----
+# 用户设置在 ~/.qwen/settings.json，钩子写在里面的 hooks 字段：格式和 Claude Code 一样
+#（要写 type: "command"，matcher 支持 "*" / ".*"），不是它上游 Gemini CLI 的那套。
+# timeout 的单位也跟着 Claude Code 是「秒」：Gemini CLI 模板里那个 5000 在这里会被当成毫秒兼容值。
+# 没有能把 ~/.qwen 整体挪走的环境变量（只有 QWEN_CODE_SYSTEM_SETTINGS_PATH 这类系统级路径），所以按默认位置找。
+QWEN_SETTINGS = HOME / ".qwen/settings.json"
+
+
+def qwen(install: bool) -> None:
+    if install:
+        if not found(QWEN_SETTINGS.parent, "Qwen Code", ("settings.json",)):
+            return
+        merge_hooks(QWEN_SETTINGS, REPO / "integrations/qwen/hooks.json")
+        print("  → 新开的 Qwen Code 会话生效（钩子在会话开始时读配置）")
+    else:
+        remove_hooks(QWEN_SETTINGS)
+
+
 # ---- Antigravity ----
 # 它的 hooks.json 是「名字 → 各事件」的格式，CrossPet 只占 "crosspet" 这一项
 ANTIGRAVITY_HOOKS = HOME / ".gemini/config/hooks.json"
@@ -811,7 +829,6 @@ CURSOR_HOOKS = HOME / ".cursor" / "hooks.json"
 
 def load_cursor_template() -> dict:
     data = load_json(REPO / "integrations/cursor/hooks.json")
-    # 模板里的命令指向运行目录里的桥接脚本：两边都在这里放进去（macOS 的 App 不会自己放），之后跟着 App 更新
     SUPPORT.mkdir(parents=True, exist_ok=True)
     shutil.copy2(REPO / "integrations/cursor/crosspet-cursor-bridge.py", SUPPORT / "crosspet-cursor-bridge.py")
     if os.name != "nt":
@@ -837,26 +854,51 @@ def cursor_ours(entry) -> bool:
     return isinstance(entry, dict) and CURSOR_MARK in str(entry.get("command", ""))
 
 
-def merge_cursor_hooks(target: Path) -> None:
+def cursor_character(entry):
+    """Read only our optional final character argument; do not execute a shell command."""
+    match = re.search(r'''crosspet-cursor-bridge\.py["']?(?:\s+(?:"([\w-]+)"|'([\w-]+)'|([\w-]+)))?\s*$''',
+                      str(entry.get("command", "")))
+    return next((arg for arg in match.groups() if arg is not None), "gpt") if match else None
+
+
+def merge_cursor_hooks(target: Path) -> bool:
     data = load_json(target)
     if not isinstance(data, dict) or not isinstance(data.setdefault("hooks", {}), dict):
         print(f"  ！{target} 不是 Cursor 的钩子格式（顶层要是 {{\"hooks\": {{...}}}}），没有改")
-        return
+        return False
     data.setdefault("version", 1)
     hooks = data["hooks"]
-    for event, entries in load_cursor_template()["hooks"].items():
-        current = hooks.get(event)
-        if current is None:
-            current = []
-        # 每个事件应该是命令数组；不是的（别的格式、写坏了的）不动，免得把你的配置改乱
-        if not isinstance(current, list) or (
-                current and isinstance(current[0], dict) and "hooks" in current[0] and "command" not in current[0]):
-            print(f"  ！{target} 的 {event} 不是 Cursor 的钩子格式，这一项没有改")
+    old = [entry for entries in hooks.values() if isinstance(entries, list) for entry in entries if cursor_ours(entry)]
+    roles = {cursor_character(entry) for entry in old}
+    if None in roles or len(roles) > 1:
+        print(f"  ！{target} 的 CrossPet 角色参数不一致或命令格式无法识别，保留原配置；请先统一桥接命令末尾的角色 id 后再更新")
+        return False
+    character = next(iter(roles), "gpt")
+    # 先检查新模板会使用的事件，避免发现旧的分组格式时只更新了一半。
+    template_events = load_json(REPO / "integrations/cursor/hooks.json")["hooks"]
+    for event in template_events:
+        current = hooks.get(event, [])
+        if not isinstance(current, list) or any(isinstance(entry, dict) and "hooks" in entry and "command" not in entry for entry in current):
+            print(f"  ！{target} 的 {event} 不是 Cursor 的钩子格式，保留原配置")
+            return False
+    # 退役事件也清理，只移除本桥条目；第三方命令及其它设置原样留下。
+    for event in list(hooks):
+        current = hooks[event]
+        if not isinstance(current, list):
             continue
-        hooks[event] = [entry for entry in current if not cursor_ours(entry)] + entries
+        kept = [entry for entry in current if not cursor_ours(entry)]
+        if kept or kept == current:
+            hooks[event] = kept
+        else:
+            del hooks[event]
+    for event, entries in load_cursor_template()["hooks"].items():
+        for entry in entries:
+            entry["command"] = entry["command"].rsplit(" ", 1)[0] + " " + character
+        hooks[event] = hooks.get(event, []) + entries
     backup(target)
     save_json(target, data)
     print(f"  已写入 {target}")
+    return True
 
 
 def remove_cursor_hooks(target: Path) -> None:
@@ -898,13 +940,13 @@ def cursor(install: bool) -> None:
     if install:
         if not found(CURSOR_HOOKS.parent, "Cursor", ("hooks.json",)):
             return
-        merge_cursor_hooks(CURSOR_HOOKS)
-        print("  → 新开的 Cursor 对话生效。默认使用 GPT，可指定自定义角色")
+        if merge_cursor_hooks(CURSOR_HOOKS):
+            print("  → 新开的 Cursor 对话生效。首次默认演 GPT；更新保留已有角色 id")
     else:
         remove_cursor_hooks(CURSOR_HOOKS)
 
 
-TARGETS = {"claude-hooks": claude_hooks, "claude-mod": claude_mod, "codex": codex, "deepseek": deepseek, "gemini": gemini, "antigravity": antigravity, "workbuddy": workbuddy, "zcode": zcode, "hermes": hermes, "cursor": cursor}
+TARGETS = {"claude-hooks": claude_hooks, "claude-mod": claude_mod, "codex": codex, "deepseek": deepseek, "gemini": gemini, "antigravity": antigravity, "workbuddy": workbuddy, "zcode": zcode, "hermes": hermes, "qwen": qwen, "cursor": cursor}
 
 
 def has_hooks(p: Path) -> bool:
@@ -928,6 +970,7 @@ def installed() -> list:
     if any(has_hooks(d / "settings.json") for d in workbuddy_dirs()): result.append("workbuddy")
     if has_zcode() and found(ZCODE_HOME, "", ("cli",), quiet=True): result.append("zcode")
     if has_hermes(): result.append("hermes")
+    if has_hooks(QWEN_SETTINGS) and found(QWEN_SETTINGS.parent, "", ("settings.json",), quiet=True): result.append("qwen")
     if has_cursor() and found(CURSOR_HOOKS.parent, "", ("hooks.json",), quiet=True): result.append("cursor")
     return result
 
@@ -962,7 +1005,7 @@ def plugin_status(ids=None, bundled: Path = None, plugin_dir: Path = None, state
     return [{"id": "deepseek", "label": "DeepSeek Harness", "bundled": _plugin_version(bundled),
              "installed": _plugin_version(plugin_dir / "lib/index.js"), "running": running}]
 SEEN_KEY = {"claude-hooks": "claude", "claude-mod": "claude-mod", "codex": "gpt", "deepseek": "deepseek", "gemini": "gemini",
-            "antigravity": "antigravity", "workbuddy": "workbuddy", "zcode": "zcode", "hermes": "hermes", "cursor": "cursor"}
+            "antigravity": "antigravity", "workbuddy": "workbuddy", "zcode": "zcode", "hermes": "hermes", "qwen": "qwen", "cursor": "cursor"}
 
 
 def short(p) -> str:
@@ -1154,6 +1197,8 @@ def diagnose() -> str:
     L.append(f"  最近消息：{seen('deepseek')}")
     # 其他
     L.append(f"[Gemini CLI] {file_state(GEMINI_SETTINGS, lambda: has_hooks(GEMINI_SETTINGS))}；最近消息 {seen('gemini')}")
+    L.append(f"[Qwen Code] {file_state(QWEN_SETTINGS, lambda: has_hooks(QWEN_SETTINGS))}；最近消息 {seen('qwen')}")
+    L.append(f"[Cursor] {file_state(CURSOR_HOOKS, has_cursor)}；最近消息 {seen('cursor')}")
     L.append(f"[Antigravity] {file_state(ANTIGRAVITY_HOOKS, has_antigravity)}；最近消息 {seen('antigravity')}")
     for d in workbuddy_dirs():
         if d.exists():
@@ -1164,7 +1209,6 @@ def diagnose() -> str:
     L.append(f"[Hermes] {short(HERMES_HOME)}（{'在' if HERMES_HOME.exists() else '不在'}），插件 {'在' if has_hermes() else '不在'}，"
              f"config.yaml 里启用 {'是' if hermes_on else '否'}；"
              f"环境变量 {env_line('HERMES_HOME')}；最近消息 {seen('hermes')}")
-    L.append(f"[Cursor] {file_state(CURSOR_HOOKS, has_cursor)}；最近消息 {seen('cursor')}")
     # 状态文件：各角色最近一次的状态
     states = []
     for f in sorted(STATE_DIR.glob("*-state.json")):
@@ -1205,6 +1249,7 @@ def status() -> None:
     print("WorkBuddy           :", "已接入" if any(has_hooks(d / "settings.json") for d in workbuddy_dirs()) else "未接入")
     print("ZCode               :", "已接入" if has_zcode() else "未接入")
     print("Hermes Agent        :", "已接入" if has_hermes() else "未接入")
+    print("Qwen Code           :", "已接入" if has_hooks(QWEN_SETTINGS) else "未接入")
     print("Cursor              :", "已接入" if has_cursor() else "未接入")
 
 

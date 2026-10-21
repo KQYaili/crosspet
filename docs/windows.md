@@ -35,7 +35,7 @@
 
 - 单击摸头；拖动换位置（会记住）；右键菜单；按住 **Shift** 再右键，菜单里多一项「开发者控制台」。
 - 任务栏右下角的托盘图标：右键是同一个菜单，双击让桌宠回到右下角。
-- 切到 Claude、ChatGPT / Codex、DeepSeek Harness、Antigravity、WorkBuddy、ZCode、Cursor 时自动换角色（WorkBuddy、ZCode、Hermes 按它们当前用的模型；Cursor 默认 GPT，可指定自定义角色）。按程序名识别，对照表在 `%LOCALAPPDATA%\CrossPet\windows-apps.json`，可以自己改：键是程序名（小写，带 `.exe`），值是角色 id；值留空（`""`）表示切到这个程序时不换角色。DeepSeek Harness 里用的是别家模型时，切过去会换成那个模型的角色。
+- 切到 Claude、ChatGPT / Codex、DeepSeek Harness、Antigravity、WorkBuddy、ZCode 时自动换角色（后三个按它们当前用的模型）。按程序名识别，对照表在 `%LOCALAPPDATA%\CrossPet\windows-apps.json`，可以自己改：键是程序名（小写，带 `.exe`），值是角色 id；值留空（`""`）表示切到这个程序时不换角色。DeepSeek Harness 里用的是别家模型时，切过去会换成那个模型的角色。
 - 在终端里用 AI 时，没有对应的窗口：桌宠跟着最新一条工作事件换角色（右键可以关掉）。
 - 桌宠始终在最上层，切换窗口时会重新置顶。
 - 每 3 小时（以及电脑从睡眠中醒来时）检查一次新版本，有新版时她会举着礼物提醒，右键菜单顶上出现「更新到 …」。
@@ -49,6 +49,9 @@
 | DeepSeek Harness | 工作状态 + 余额。余额优先用你填的 API Key 查；没填 Key 就用 Harness 里登录的账号查。接入后要从托盘完全退出 Harness 再打开 |
 | Antigravity | 跟着工作状态动 |
 | Gemini CLI | 跟着工作状态动 |
+| WorkBuddy、ZCode、Hermes Agent | 按当前模型换角色，跟着工作状态动 |
+| Qwen Code | 使用千问模型时切换为千问角色，跟着工作状态动；新开的会话生效 |
+| Cursor | 任意模型使用同一角色，首次默认 GPT；可改为已有的自定义角色，新开的会话生效。需要先打开桌宠；真实 Cursor 会话及自动启动链尚未验证 |
 
 - GPT 额度：右键 →「设置…」里打开「显示 GPT 额度」，从 Codex 会话记录里只读额度数字。
 - Gemini 额度：右键 →「设置…」里打开「显示 Gemini 额度」，需要 Antigravity 开着。和 macOS 版一样，只在本机向 Antigravity 后台服务问额度（用它每次启动随机生成、只在本机有效的令牌），不碰账号凭据。

@@ -3,7 +3,8 @@
 const fs = require('fs'), path = require('path'), vm = require('vm'), crypto = require('crypto')
 const root = __dirname
 function fn(html, name, optional = false) {
-  const re = new RegExp('^function ' + name + '\\([^]*?^\\}', 'm'), match = html.match(re)
+  const singleLine = html.match(new RegExp('^function ' + name + '\\([^\\r\\n]*\\}$', 'm'))
+  const re = new RegExp('^function ' + name + '\\([^]*?^\\}', 'm'), match = singleLine || html.match(re)
   if (!match && !optional) throw Error('Cannot extract actual function: ' + name)
   return match?.[0] || ''
 }
@@ -45,7 +46,7 @@ function makeEnv(html) {
     const elements = new Map()
     function element(id) {
       if(elements.has(id)) return elements.get(id)
-      const classes=new Set(); const el={id, textContent:'',src:'',complete:true,style:{},classList:{add:(...a)=>a.forEach(x=>classes.add(x)),remove:(...a)=>a.forEach(x=>classes.delete(x)),contains:x=>classes.has(x)}}
+      const classes=new Set(); const el={id, textContent:'',src:'',complete:true,style:{},removeAttribute(n){if(n==='src')this.src=''},classList:{add:(...a)=>a.forEach(x=>classes.add(x)),remove:(...a)=>a.forEach(x=>classes.delete(x)),contains:x=>classes.has(x)}}
       let value='';Object.defineProperty(el,'innerHTML',{get:()=>value,set:v=>{value=v;if(id==='fx')effectHistory.push({at:Date.now(),charId,pose,html:v})}})
       elements.set(id,el);return el
     }
@@ -66,7 +67,7 @@ function makeEnv(html) {
     function capture(){return {charId,pose,bubble:$('bubble').textContent,fx:$('fx').innerHTML,fxHidden:$('fx').classList.contains('hide'),charState:JSON.parse(JSON.stringify(charState)),history:[...history],effectHistory:[...effectHistory],generation:characterGeneration}}
     function hook(id,p,event,extra={}){applyCharState(id,{pose:p,event,ts:Date.now()/1000,...extra})}
   `
-  const funcs = ['characterTimeout','clearCharacterTimers','setFx','restPose','show','setCharacter','watchStuck','applyCharState','aiActivity','setSessions'].map(n => fn(html,n,n==='characterTimeout'||n==='clearCharacterTimers')).join('\n')
+  const funcs = ['setBlinkSrc','characterTimeout','clearCharacterTimers','setFx','restPose','show','setCharacter','watchStuck','applyCharState','aiActivity','setSessions'].map(n => fn(html,n,n==='setBlinkSrc'||n==='characterTimeout'||n==='clearCharacterTimers')).join('\n')
   vm.runInContext(setup + '\n' + funcs, context)
   const run = code => vm.runInContext(code, context)
   run(`hook('grok','idle','SessionStart');hook('claude','idle','SessionStart')`)

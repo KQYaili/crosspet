@@ -16,7 +16,8 @@ extension App {
         ("workbuddy", "WorkBuddy", "按当前模型换角色"),
         ("zcode", "ZCode（智谱）", "按会话的模型换角色"),
         ("hermes", "Hermes Agent", "按当前模型换角色；新开的会话生效"),
-        ("cursor", "Cursor", "跟着工作状态动，默认使用 GPT，也可指定自定义角色"),
+        ("cursor", "Cursor", "跟着工作状态动。默认演 GPT，命令末尾可以改成自己的角色"),
+        ("qwen", "Qwen Code（阿里）", "按当前模型换角色；新开的会话生效"),
     ]
     var integrateScript: URL? {
         let url = Bundle.main.resourceURL!.appendingPathComponent("tools/integrate.py")
@@ -61,7 +62,7 @@ extension App {
     // 钩子 / 插件每收到一条事件就在状态目录写 seen-<名字>（时间戳）。状态目录 /tmp 重启会清空，所以桌宠把读到的最新时间存进设置。
     // 设置里据此标出「接上了但从没收到过消息」，反馈里也带着
     static let seenKeys = ["claude-hooks": "claude", "claude-mod": "claude-mod", "codex": "gpt", "deepseek": "deepseek", "gemini": "gemini",
-                           "antigravity": "antigravity", "workbuddy": "workbuddy", "zcode": "zcode", "hermes": "hermes", "cursor": "cursor"]
+                           "antigravity": "antigravity", "workbuddy": "workbuddy", "zcode": "zcode", "hermes": "hermes", "qwen": "qwen", "cursor": "cursor"]
     var lastSeen: [String: Double] {
         get { (defaults.dictionary(forKey: "seen") as? [String: Double]) ?? [:] }
         set { defaults.set(newValue, forKey: "seen") }
@@ -182,6 +183,8 @@ extension App {
                 if let mode = value as? String, ["auto", "on", "off"].contains(mode) { defaults.set(mode, forKey: "auraMode"); js("setAuraMode(\(quote(mode)))") }
             case "followApps":
                 defaults.set(value as? Bool ?? true, forKey: "followApps")
+            case "followEvents":
+                defaults.set(value as? Bool ?? false, forKey: "followEvents")
             case "hideFullscreen":
                 defaults.set(value as? Bool ?? true, forKey: "hideFullscreen"); applyFullscreenBehavior()
             case "eggs":
@@ -203,6 +206,10 @@ extension App {
             case "codexResets":
                 let on = value as? Bool ?? false
                 defaults.set(on, forKey: "codexResets"); js("setCodexResets(\(on))")
+            case "peakSkins":
+                defaults.set(Self.cleanPeakSkins(value), forKey: "peakSkins"); js("setPeakSkins(\(peakSkinsJSON))")
+            case "peakStyle":
+                if let s = value as? String, ["bar", "text", "off"].contains(s) { defaults.set(s, forKey: "peakStyle"); js("setPeakStyle(\(quote(s)))") }
             case "dsQuota":
                 let on = value as? Bool ?? true
                 defaults.set(on, forKey: "dsQuota")

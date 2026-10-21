@@ -10,7 +10,7 @@
 
 只写状态目录（默认 /tmp/crosspet，可用环境变量 CROSSPET_STATE_DIR 改）里的两个小文件：
     <角色id>-state.json   当前状态，桌宠读取
-    <角色id>-turn.json    本轮用了几次工具（判断「大活」用）
+    <宿主id>-turn-tools.json  按会话和轮次记录用了几次工具（判断「大活」用）
 不影响 AI 本身的行为：一般不向 stdout 输出；Antigravity 要求回一个 JSON，就回空的 {}。
 用 /tmp 是因为有的 AI（比如 DeepSeek Harness）的钩子跑在沙箱里，只允许写 /tmp。
 """
@@ -24,28 +24,9 @@ BIG_JOB_TOOLS = 8  # 一轮里用了这么多次工具，结束时「得意」�
 
 character = sys.argv[1] if len(sys.argv) > 1 else "claude"
 default_data = Path(os.environ.get("CROSSPET_DATA_DIR") or str(Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData/Local"))) / "CrossPet"))
+# 桌宠的数据目录（角色、退出记号）：设了 CROSSPET_DATA_DIR 就用它（测试也靠它），没设时 Windows 在 %LOCALAPPDATA%\CrossPet，macOS 在 Application Support
+app_data = default_data if (os.name == "nt" or os.environ.get("CROSSPET_DATA_DIR")) else Path.home() / "Library/Application Support/CrossPet"
 state_dir = Path(os.environ.get("CROSSPET_STATE_DIR") or (str(default_data / "state") if os.name == "nt" else "/tmp/crosspet"))
-# 桌宠的运行目录（角色、user-quit 等记号）：macOS 默认在 Application Support；设了 CROSSPET_DATA_DIR 两边都按它（测试用临时目录，不碰真的设置）
-support_dir = default_data if os.name == "nt" or os.environ.get("CROSSPET_DATA_DIR") else Path.home() / "Library/Application Support/CrossPet"
-
-
-def replace_state_file(temporary: Path, target: Path) -> None:
-    """Windows readers can briefly prevent replacement of an existing state file."""
-    try:
-        for attempt in range(4):
-            try:
-                temporary.replace(target)
-                return
-            except PermissionError:
-                if attempt == 3:
-                    raise
-                time.sleep(.01)
-    finally:
-        try:
-            temporary.unlink(missing_ok=True)
-        except OSError:
-            pass
-
 
 # 跟着 AI 出现：开始干活（会话开始 / 发消息 / 调模型）时桌宠没开着就把它打开。
 # 用户从菜单手动退出过（user-quit）就先不管，直到这个 AI 程序关掉重开、或者重启电脑：
@@ -141,7 +122,7 @@ def app_started_at():
 
 def ensure_pet() -> str:
     """返回这次的结果（写进 <状态目录>/autostart.txt，排查「为什么没出来」用）"""
-    data = support_dir
+    data = app_data
     quit_flag = data / "user-quit"
     if quit_flag.exists():
         quit_at = quit_flag.stat().st_mtime
@@ -282,19 +263,23 @@ except Exception:
 if not isinstance(event, dict):
     sys.exit(0)
 
-# Cursor 默认也会跑 Claude Code 的钩子（~/.claude/settings.json，「Third-Party Imports」），事件里带 cursor_version。
-# Cursor 由它自己的接入（integrations/cursor）处理自己的事件；这里再演一遍会让同一个对话同时驱动两个角色，心跳也会把 Cursor 算成 Claude
-if event.get("cursor_version"):
-    sys.exit(0)
+def cursor_bridge_installed() -> bool:
+    """只在 Cursor 确实配置了独立桥时，跳过它导入的 Claude 钩子。卸载后自然恢复旧接入。"""
+    try:
+        config = json.loads((Path.home() / ".cursor/hooks.json").read_text(encoding="utf-8-sig"))
+        hooks = config.get("hooks") if isinstance(config, dict) else None
+        if not isinstance(hooks, dict):
+            return False
+        return any(isinstance(entry, dict) and isinstance(entry.get("command"), str)
+                   and any(mark in entry["command"] for mark in ("crosspet-cursor-bridge.py", "crosspet_cursor_bridge.py"))
+                   for entries in hooks.values() if isinstance(entries, list) for entry in entries)
+    except (OSError, ValueError):
+        return False  # 正在写配置 / 未安装时，保留已有 observer 的行为。
 
-# 心跳：「最近一次收到这个 AI 的消息」，桌宠记下来，设置里能看出「接上了但从没收到过消息」，反馈里也带着。
-# 文件名按接入的是哪个 AI 分（Antigravity 和 Gemini CLI 都用 gemini 角色，Antigravity 多带一个事件名参数）
-try:
-    seen_key = "antigravity" if character == "gemini" and len(sys.argv) > 2 else character
-    state_dir.mkdir(parents=True, exist_ok=True)
-    (state_dir / f"seen-{seen_key}").write_text(str(int(time.time())))
-except Exception:
-    pass
+
+# Cursor 会导入 Claude hooks；只在它另有独立桥接时去重，不能让未迁移的用户升级后断联。
+if event.get("cursor_version") and cursor_bridge_installed():
+    sys.exit(0)
 
 # Codex 会在对话结束后自己在后台整理记忆（工作目录在 ~/.codex/memories），也会调工具，但不是你让它干的活，
 # 而且没有开始 / 结束事件，演了会一直停在思考：工作目录在 Codex 自己的配置目录里的事件都不管
@@ -325,157 +310,148 @@ if character == "gpt" and "transcript_path" in event:
     else:
         sys.exit(0)
 
-class _CodexTurnOrder:
-    """Serialize Codex writes and keep completed turns from being revived."""
-    def __init__(self, payload):
-        import atexit
-        self.sid = str(payload.get("session_id") or payload.get("sessionId") or payload.get("conversationId") or "")
-        self.tid = str(payload.get("turn_id") or "")
-        self.name = str(payload.get("hook_event_name") or "")
-        # spawn_agent 开的子代理：事件带主会话的 session_id、子线程自己的 turn_id，再加 agent_id
-        self.agent = str(payload.get("agent_id") or "")
-        self.payload = payload
-        self.path = state_dir / ".codex-turn-order.json"
-        self.lock = open(state_dir / ".codex-turn-order.lock", "a+b")
-        self.lock.seek(0)
-        self.locked = False
-        deadline = time.monotonic() + 1.0
+arg_event = sys.argv[2] if len(sys.argv) > 2 else ""
+name = event.get("hook_event_name") or arg_event
+source_host = character  # 不能用按模型换过的角色来分会话 / 工具计数
+
+
+# 从门禁到状态、模型路由、会话卡片写完共用一把宿主锁。只锁 turn_gate 会留下
+# 「工具已获准 → Stop 写完 → 旧工具才替换状态」的窗口。写完会话再关句柄；异常退出也会释放。
+def event_lock(owner: str):
+    state_dir.mkdir(parents=True, exist_ok=True)
+    lock = open(state_dir / f".{owner}-events.lock", "a+b")
+    try:
+        deadline = time.monotonic() + .75
         while True:
             try:
+                lock.seek(0)
                 if os.name == "nt":
                     import msvcrt
-                    msvcrt.locking(self.lock.fileno(), msvcrt.LK_NBLCK, 1)
+                    msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
                 else:
                     import fcntl
-                    fcntl.flock(self.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                self.locked = True
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 break
             except OSError:
                 if time.monotonic() >= deadline:
-                    self.lock.close()
-                    raise TimeoutError("Codex observer lock busy")
-                time.sleep(0.01)
-        atexit.register(self.close)
-        try:
-            saved = json.loads(self.path.read_text(encoding="utf-8"))
-            self.sessions = saved.get("sessions", {})
-            if not isinstance(self.sessions, dict):
-                self.sessions = {}
-        except (OSError, ValueError, AttributeError):
-            self.sessions = {}
-        self.entry = self.sessions.get(self.sid, {})
-        if not isinstance(self.entry, dict):
-            self.entry = {}
-
-    def accept(self):
-        old_tid = str(self.entry.get("turn_id") or "")
-        retired = list(self.entry.get("retired_turns") or [])[-32:]
-        is_prompt = self.name == "UserPromptSubmit"
-        is_session_start = self.name == "SessionStart"
-        if self.agent:
-            # A subagent never starts, switches or ends the root turn: it shows only while that
-            # turn is running, and its first message (UserPromptSubmit) is not the user's prompt.
-            if is_prompt or not old_tid or self.entry.get("terminal"):
-                return self.reject("subagent-prompt" if is_prompt else "subagent-outside-turn")
-            self.entry.update(last_event=self.name, ts=time.time())
-            self.sessions[self.sid] = self.entry
-            return True
-        # Manual /compact runs as its own turn: a new turn_id, no UserPromptSubmit and no Stop
-        # (its manual PostCompact ends it).
-        manual_compact = self.name == "PreCompact" and str(self.payload.get("trigger", "")).lower() == "manual"
-        # Compact/resume SessionStart often has no turn_id. It must not retire an
-        # active turn or reopen a completed one; the next prompt starts new work.
-        if is_session_start and self.entry:
-            return self.reject("session-start-is-not-a-new-turn")
-        if old_tid and not self.tid and self.name in (
-                "PreToolUse", "PostToolUse", "SubagentStart", "SubagentStop",
-                "PreCompact", "PostCompact", "Stop", "Interrupt", "StopFailure", "PermissionRequest"):
-            return self.reject("missing-turn-id-for-modern-session")
-        if self.tid and self.tid in retired:
-            return self.reject("retired-turn")
-        if self.entry.get("terminal") and self.tid == old_tid and self.tid:
-            return self.reject("completed-turn")
-        if is_prompt or is_session_start or (manual_compact and self.tid and self.tid != old_tid):
-            if old_tid and old_tid != self.tid and old_tid not in retired:
-                retired.append(old_tid)
-            self.entry = {"turn_id": self.tid, "terminal": False, "tools": 0,
-                          "retired_turns": retired[-32:]}
-        elif old_tid and self.tid and self.tid != old_tid:
-            # UserPromptSubmit is authoritative for switching an existing session.
-            return self.reject("different-turn-without-prompt")
-        elif self.entry.get("terminal"):
-            # Legacy inputs without turn_id reopen on their next prompt.
-            return self.reject("completed-turn-legacy")
-        else:
-            self.entry.setdefault("turn_id", self.tid)
-            if not old_tid and self.tid:
-                self.entry["turn_id"] = self.tid
-            self.entry.setdefault("tools", 0)
-            self.entry.setdefault("retired_turns", retired)
-        terminal = self.name in ("Stop", "Interrupt", "StopFailure", "SessionEnd") or (
-            self.name == "PostCompact" and str(self.payload.get("trigger", "")).lower() == "manual")
-        self.entry.update(terminal=terminal, last_event=self.name, ts=time.time())
-        self.sessions[self.sid] = self.entry
-        return True
-
-    def reject(self, reason):
-        self.entry["last_rejected"] = {"event": self.name, "turn_id": self.tid,
-                                       "reason": reason, "ts": time.time()}
-        self.sessions[self.sid] = self.entry
-        self.finish()
-        return False
-
-    def finish(self):
-        try:
-            # Bound local metadata; no prompt text, tool inputs or outputs are saved.
-            recent = sorted(self.sessions.items(), key=lambda kv: float(kv[1].get("ts", 0)))[-128:]
-            tmp = self.path.with_name(f".codex-turn-order.{os.getpid()}.json")
-            tmp.write_text(json.dumps({"version": 1, "sessions": dict(recent)}), encoding="utf-8")
-            replace_state_file(tmp, self.path)
-        finally:
-            self.close()
-
-    def close(self):
-        if not self.locked:
-            return
-        try:
-            self.lock.seek(0)
-            if os.name == "nt":
-                import msvcrt
-                msvcrt.locking(self.lock.fileno(), msvcrt.LK_UNLCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(self.lock, fcntl.LOCK_UN)
-        finally:
-            self.locked = False
-            self.lock.close()
+                    raise TimeoutError("observer event lock busy")
+                time.sleep(.005)
+        return lock
+    except BaseException:
+        lock.close()
+        raise
 
 
-_codex_order = None
-if len(sys.argv) > 1 and sys.argv[1] == "gpt" and (
-        event.get("session_id") or event.get("sessionId") or event.get("conversationId")):
+try:
+    _event_lock = event_lock(source_host)
+except OSError:
+    # 观察者写不了状态时安静退出，不绕过锁写共享文件，也不影响 AI。
+    if arg_event:
+        print("{}")
+    sys.exit(0)
+
+
+# ---- 按轮次丢掉迟到的事件（Codex：事件带 turn_id；PR #26 @KQYaili 报的）----
+# 沿用上游的会话 + 轮次账本。子任务另记首次看到时所属的主轮次，换轮后不重新归属。
+TURN_END = ("Stop", "StopFailure", "Interrupt", "SessionEnd")
+TURN_KEEP = 24 * 3600
+
+
+def turn_gate(owner: str, sid: str, tid: str, name: str, child: bool) -> tuple:
+    """返回 (这条事件要不要演, 工具计数所属的主轮次)。调用者持有整条事件的锁。"""
+    path = state_dir / f"{owner}-turns.json"
     try:
-        _codex_order = _CodexTurnOrder(event)
-    except (OSError, TimeoutError):
-        # This is a visual observer: a busy filesystem must never block AI work.
-        sys.exit(0)
-    if not _codex_order.accept():
-        sys.exit(0)
+        book = json.loads(path.read_text(encoding="utf-8-sig"))
+        if not isinstance(book, dict):
+            book = {}
+    except Exception:
+        book = {}
+    now = time.time()
+    book = {k: v for k, v in book.items() if isinstance(v, dict) and now - float(v.get("ts", 0)) < TURN_KEEP}
+    rec = book.get(sid) or {"turn": "", "done": False, "finished": []}
+    finished = rec.get("finished") or []
+    children = rec.get("children")
+    children = children if isinstance(children, dict) else {}
+    if child:
+        key = json.dumps([str(event.get("agent_id")), tid])
+        binding = children.get(key)
+        binding = binding if isinstance(binding, dict) else {}
+        explicit_parent = str(event.get("parent_turn_id") or event.get("root_turn_id") or "")
+        parent = str(binding.get("turn") or explicit_parent or rec.get("turn") or "")
+        allow = not rec.get("done") and not binding.get("done") and parent == rec.get("turn", "")
+        if explicit_parent and explicit_parent != rec.get("turn"):
+            allow = False
+        children[key] = {"turn": parent, "done": bool(binding.get("done") or name in TURN_END or name == "SubagentStop")}
+    elif tid in finished:
+        allow = False
+    else:
+        allow = True
+        # compact / resume 的 SessionStart 不是新轮次，不能退休正在工作的主轮次。
+        metadata = name == "SessionStart" and str(event.get("source", "")).lower() in ("compact", "resume")
+        if tid != rec.get("turn") and not metadata:
+            if rec.get("turn") and rec["turn"] not in finished:
+                finished = (finished + [rec["turn"]])[-128:]
+            rec = {"turn": tid, "done": False, "finished": finished}
+        ends = name in TURN_END or (name == "PostCompact" and str(event.get("trigger", "")).lower() == "manual")
+        if ends:
+            rec["done"] = True
+            rec["finished"] = (finished + [tid])[-128:]
+    rec["children"] = dict(list(children.items())[-128:])
+    rec["ts"] = now
+    book[sid] = rec
+    tmp = state_dir / f".{owner}-turns.{os.getpid()}.json"
+    tmp.write_text(json.dumps(book))
+    tmp.replace(path)
+    return allow, str(rec.get("turn") or tid)
 
 
-# 多模型宿主（WorkBuddy、ZCode、Hermes Agent）：每条事件都带当前模型名，按它选角色；认不出的模型（混元、Kimi、GLM……）
+turn_id = str(event.get("turn_id") or "")
+turn_sid = str(event.get("session_id") or event.get("sessionId") or event.get("conversationId") or "")
+effective_turn = turn_id
+if turn_id and turn_sid:
+    is_child = bool(event.get("agent_id"))
+    try:
+        allowed, effective_turn = turn_gate(source_host, turn_sid, turn_id, name, is_child)
+    except Exception:
+        # 记账失败不能让旧事件绕过门禁去改模型路由或可见状态；下一条消息再试。
+        allowed = False
+    if not allowed:
+        if arg_event:
+            print("{}")
+        sys.exit(0)
+    if is_child:
+        if name == "UserPromptSubmit":
+            name = "SubagentStart"
+        elif name in TURN_END:
+            name = "SubagentStop"
+
+
+# 心跳：「最近一次收到这个 AI 的消息」，桌宠记下来，设置里能看出「接上了但从没收到过消息」，反馈里也带着。
+# 文件名按接入的是哪个 AI 分（Antigravity 和 Gemini CLI 都用 gemini 角色，Antigravity 多带一个事件名参数）
+try:
+    seen_key = "antigravity" if character == "gemini" and len(sys.argv) > 2 else character
+    state_dir.mkdir(parents=True, exist_ok=True)
+    (state_dir / f"seen-{seen_key}").write_text(str(int(time.time())))
+except Exception:
+    pass
+
+# 多模型宿主（WorkBuddy、ZCode、Hermes Agent、Qwen Code）：事件里带当前模型名就按它选角色；认不出的模型（混元、Kimi、GLM……）
 # 写给「当前角色」（current），桌宠用正在显示的角色演，不换人。当前角色另外记在 <宿主>-host.json，
 # 桌宠切到这个程序的窗口时按它换角色
-MULTI_MODEL_HOSTS = ("workbuddy", "zcode", "hermes")
-# ZCode 默认用智谱的 GLM；它只在会话开始时告诉模型名，之后的事件按会话 id 查当时记下的模型
-HOST_DEFAULT_MODEL = {"zcode": "glm"}
-characters_dir = support_dir / "characters"
+MULTI_MODEL_HOSTS = ("workbuddy", "zcode", "hermes", "qwen")
+# ZCode 默认用智谱的 GLM；Qwen Code 默认用自家的千问。它们只在会话开始时告诉模型名，
+# 之后的事件按会话 id 查当时记下的模型
+HOST_DEFAULT_MODEL = {"zcode": "glm", "qwen": "qwen"}
+characters_dir = app_data / "characters"
 
 
 def character_for_model(model: str):
     m = model.lower()
     if "glm" in m or "zhipu" in m or "chatglm" in m or "z.ai" in m or "zai-" in m:
         return "glm"
+    # coder-model：Qwen Code 用千问账号登录时报的模型别名（实为 Qwen 3.7 Max）
+    if "qwen" in m or "dashscope" in m or "bailian" in m or "tongyi" in m or m == "coder-model":
+        return "qwen"
     if "kimi" in m or "moonshot" in m:
         return "kimi"
     if "deepseek" in m:
@@ -492,27 +468,48 @@ def character_for_model(model: str):
 def remember_session_model(host: str, fallback: str = "") -> str:
     """有的宿主只在会话开始时给模型名：记下来（按会话 id），之后的事件查它"""
     sid = str(event.get("session_id") or event.get("sessionId") or "")
-    # claude / gpt 是角色名，<角色>-sessions.json 已经是多会话状态文件了，模型另记一个文件
-    path = state_dir / (f"{host}-models.json" if host in SELF_HOSTS else f"{host}-sessions.json")
-    try:
-        known = json.loads(path.read_text())
-        # 只认「会话 id → 模型名」：以前多个钩子共用临时文件时，这里可能混进别的文件的内容，混进来的扔掉
-        known = {k: v for k, v in known.items() if isinstance(v, str)} if isinstance(known, dict) else {}
-    except Exception:
-        known = {}
+    # 宿主名本身就是角色名时（claude / gpt / qwen），<名字>-sessions.json 已经被多会话状态占用了（见 update_sessions），
+    # 模型得另记一个文件：不然记模型会把会话状态当模型名读回来（character_for_model 收到 dict 直接崩）
+    path = state_dir / (f"{host}-models.json" if host in NAMED_HOSTS else f"{host}-sessions.json")
     model = str(event.get("model") or "")
     if model and sid:
-        known[sid] = model
-        known = dict(list(known.items())[-50:])  # 只留最近的会话
         try:
             state_dir.mkdir(parents=True, exist_ok=True)
-            # 临时文件名带进程号：别的钩子同时在写（包括 update_sessions 写 <角色>-sessions.json）时不会互相顶掉
-            tmp = path.with_name(f".{path.stem}.{os.getpid()}{path.suffix}")
-            tmp.write_text(json.dumps(known))
-            replace_state_file(tmp, path)
+            # 同一宿主的几个会话会同时启动：锁住「读旧表 → 加新项 → 替换」整段。
+            # 临时文件也按目标文件命名，不能与 update_sessions 的 .qwen-sessions.json 抢同一路径。
+            with open(state_dir / f".{host}-models.lock", "a+b") as lock:
+                if os.name == "nt":
+                    import msvcrt
+                    msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(lock, fcntl.LOCK_EX)
+                try:
+                    try:
+                        known = json.loads(path.read_text())
+                    except Exception:
+                        known = {}
+                    if not isinstance(known, dict):
+                        known = {}
+                    known[sid] = model
+                    known = dict(list(known.items())[-50:])  # 只留最近的会话
+                    tmp = state_dir / f".{path.stem}.{os.getpid()}.json"
+                    tmp.write_text(json.dumps(known))
+                    tmp.replace(path)
+                finally:
+                    if os.name == "nt":
+                        lock.seek(0)
+                        msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
         except Exception:
             pass
-    return model or known.get(sid, "") or fallback or HOST_DEFAULT_MODEL.get(host, "")
+    try:
+        known = json.loads(path.read_text())
+    except Exception:
+        known = {}
+    saved = known.get(sid, "") if isinstance(known, dict) else ""
+    if not isinstance(saved, str):
+        saved = ""
+    return model or saved or fallback or HOST_DEFAULT_MODEL.get(host, "")
 
 
 def character_for_url(url: str):
@@ -537,6 +534,8 @@ def installed(c) -> bool:
 # 按模型换成对应的角色，认不出的模型还是由自己来演。Codex 每条事件都带模型名；Claude Code 只在会话开始时给，
 # 另外看环境变量里的模型名和接口地址
 SELF_HOSTS = ("claude", "gpt")
+# 宿主名同时也是角色名的：它们的 <名字>-sessions.json 被多会话状态占用，记模型要另开一个文件（见 remember_session_model）
+NAMED_HOSTS = SELF_HOSTS + ("qwen",)
 if character in SELF_HOSTS:
     host = character
     # 先看事件里的模型名（Claude Code 会话开始时给的、Codex 每条都给的，是实际要用的那个）；
@@ -551,9 +550,9 @@ if character in SELF_HOSTS:
     event["model"] = model
     try:
         state_dir.mkdir(parents=True, exist_ok=True)
-        hp = state_dir / f".{host}-host.{os.getpid()}.json"
+        hp = state_dir / f".{host}-host.json"
         hp.write_text(json.dumps({"character": mapped, "model": model, "ts": time.time()}))
-        replace_state_file(hp, state_dir / f"{host}-host.json")
+        hp.replace(state_dir / f"{host}-host.json")
     except Exception:
         pass
 
@@ -569,14 +568,12 @@ if character in MULTI_MODEL_HOSTS:
     if model:
         try:
             state_dir.mkdir(parents=True, exist_ok=True)
-            hp = state_dir / f".{host}-host.{os.getpid()}.json"
+            hp = state_dir / f".{host}-host.json"
             hp.write_text(json.dumps({"character": mapped, "model": str(event.get("model")), "ts": time.time()}))
-            replace_state_file(hp, state_dir / f"{host}-host.json")
+            hp.replace(state_dir / f"{host}-host.json")
         except Exception:
             pass
 
-arg_event = sys.argv[2] if len(sys.argv) > 2 else ""
-name = event.get("hook_event_name") or arg_event
 call = event.get("toolCall") if isinstance(event.get("toolCall"), dict) else {}  # Antigravity
 tool = str(event.get("tool_name") or call.get("name", "")).lower()
 tool_input = json.dumps(event.get("tool_input") or call.get("args", ""), ensure_ascii=False).lower()
@@ -614,7 +611,7 @@ def pose_for_tool(t: str) -> str:
     # Hermes Agent：在本地找文件 / 翻历史会话 / 看终端输出 / 看图，都算看资料（名字里带 search，别当成上网搜）
     if t in ("search_files", "session_search", "read_terminal", "vision_analyze"):
         return "reading"
-    if "view_image" in t or t == "find_by_name":
+    if "view_image" in t or t in ("find_by_name", "zoom_image"):   # zoom_image：Qwen Code 放大看图
         return "reading"
     if t in ("read_url_content",) or t.startswith("browser"):
         return "searching"
@@ -641,24 +638,37 @@ def tool_failed() -> bool:
     return False
 
 
-turn_file = state_dir / f"{character}-turn.json"
+# 计数跟原始宿主 + 会话 + 主轮次走，不能让另一段对话的发消息 / Stop 把它清零。
+# 没有会话 id 的旧宿主保留一份共享计数；有 id 的宿主即使不带 turn_id 也按会话分开。
+turn_file = state_dir / f"{source_host}-turn-tools.json"
+turn_key = json.dumps([turn_sid, effective_turn])
+
+
+def read_tool_counts() -> dict:
+    try:
+        known = json.loads(turn_file.read_text())
+        return known if isinstance(known, dict) else {}
+    except Exception:
+        return {}
 
 
 def turn_tools() -> int:
-    if _codex_order is not None:
-        return int(_codex_order.entry.get("tools", 0))
+    entry = read_tool_counts().get(turn_key)
     try:
-        return int(json.loads(turn_file.read_text()).get("tools", 0))
-    except Exception:
+        return int(entry.get("tools", 0)) if isinstance(entry, dict) else 0
+    except (TypeError, ValueError):
         return 0
 
 
 def set_turn_tools(n: int) -> None:
-    if _codex_order is not None:
-        # Codex 按会话记在 .codex-turn-order.json；不再动 <角色>-turn.json，免得换了模型的 Codex（比如演 Claude）把那边的计数清零
-        _codex_order.entry["tools"] = n
-        return
-    turn_file.write_text(json.dumps({"tools": n}))
+    known = read_tool_counts()
+    now = time.time()
+    known = {k: v for k, v in known.items() if isinstance(v, dict) and now - float(v.get("ts", 0)) < TURN_KEEP}
+    known[turn_key] = {"tools": n, "ts": now}
+    known = dict(sorted(known.items(), key=lambda item: item[1].get("ts", 0))[-256:])
+    tmp = state_dir / f".{source_host}-turn-tools.{os.getpid()}.json"
+    tmp.write_text(json.dumps(known))
+    tmp.replace(turn_file)
 
 
 state_dir.mkdir(parents=True, exist_ok=True)
@@ -684,8 +694,7 @@ elif name in ("Notification",):
     if kind in ASKING_NOTIFICATIONS or (not kind and "permission" in message):
         pose = "asking"
 elif name in ("SessionStart",):
-    # 压缩上下文后重新开始（source=compact，Claude Code 自动压缩时在一轮中途发）：还在干活，不回待机
-    pose = None if str(event.get("source", "")).lower() == "compact" else "idle"
+    pose = "idle"
 elif name in ("UserPromptSubmit", "BeforeAgent"):
     set_turn_tools(0)
     pose = "listening"
@@ -731,23 +740,37 @@ elif name in ("BeforeModel", "PreInvocation"):
 elif name in ("SessionEnd",):
     pose = "sleeping"
 
-state = {"pose": pose, "event": name, "tool": tool, "ts": time.time()}
+state = {"pose": pose, "event": name, "tool": tool, "ts": time.time(),
+         "host": source_host, "session": turn_sid, "turn": effective_turn}
 if pose == "thinking" and name in ("PreInvocation", "PostToolUse", "AfterTool"):
     # 快的工具（ls、读文件、grep）从开始到结束常常不到 0.3 秒，桌宠每 0.3 秒才读一次，
     # 刚写的工具动作会被「回去思考」直接盖掉（Antigravity 甚至几毫秒内就开始下一轮思考）。
     # 所以把它捎带上：桌宠先演完那个动作再进入思考；已经演过的（同一个 afterTs）桌宠会跳过。
     try:
         prev = json.loads((state_dir / f"{character}-state.json").read_text())
-        if prev.get("event") == "PreToolUse" and time.time() - float(prev.get("ts", 0)) < 3:
+        if (prev.get("event") == "PreToolUse" and time.time() - float(prev.get("ts", 0)) < 3
+                and (prev.get("host"), prev.get("session"), prev.get("turn")) == (source_host, turn_sid, effective_turn)):
             state.update(after=prev.get("pose"), afterTs=prev.get("ts"), tool=prev.get("tool", ""))
     except Exception:
         pass
+
+if name == "SessionStart" and str(event.get("source", "")).lower() in ("compact", "resume"):
+    # 压缩 / 恢复不是新的一轮。丢掉它，免得把正在做的动作盖成待机。
+    sys.exit(0)
 
 if pose:
     # 临时文件名带进程号：同一个角色的几个钩子同时写（好几个对话一起干活）时不会抢同一个临时文件
     tmp = state_dir / f".{character}-state.{os.getpid()}.json"
     tmp.write_text(json.dumps(state))
-    replace_state_file(tmp, state_dir / f"{character}-state.json")
+    for attempt in range(8):
+        try:
+            tmp.replace(state_dir / f"{character}-state.json")
+            break
+        except PermissionError:
+            # Windows 上桌宠可能正读着上一份状态。等一下再换，不要让观察者钩子报错退出。
+            if attempt == 7:
+                raise
+            time.sleep(0.05)
 
 
 # 同一个 AI 同时开着好几个对话在干活：按会话另外记一份 <角色>-sessions.json（{会话id: {pose, event, ts}}），
@@ -761,27 +784,29 @@ def update_sessions(sid: str, entry) -> None:
         try:
             if os.name == "nt":
                 import msvcrt
-                lock.seek(0)  # Cursor shares this lock; a+b may leave the pointer after its marker.
+                lock.seek(0)
                 msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
             else:
                 import fcntl
                 fcntl.flock(lock, fcntl.LOCK_EX)
         except Exception:
-            pass
+            raise  # 没拿到共享会话锁时不能继续读改写，避免覆盖 Cursor 的卡片。
         try:
             known = json.loads(path.read_text())
-            known = {k: v for k, v in known.items() if isinstance(v, dict)} if isinstance(known, dict) else {}
         except Exception:
             known = {}
+        if not isinstance(known, dict):
+            known = {}
+        known = {k: v for k, v in known.items() if isinstance(v, dict)}
         now = time.time()
         if entry is None:
             known.pop(sid, None)
         else:
             known[sid] = entry
         known = {k: v for k, v in known.items() if now - float(v.get("ts", 0)) < SESSION_KEEP}
-        tmp = state_dir / f".{character}-sessions.{os.getpid()}.json"
+        tmp = state_dir / f".{character}-sessions.json"
         tmp.write_text(json.dumps(known))
-        replace_state_file(tmp, path)
+        tmp.replace(path)
         if os.name == "nt":
             try:
                 lock.seek(0)
@@ -799,8 +824,7 @@ if session_id and (pose or name == "SessionEnd"):
         pass
 
 
-if _codex_order is not None:
-    _codex_order.finish()
+_event_lock.close()  # 自动启动可能查父进程 / 等系统响应，不让下一条钩子等这一步。
 
 if name in LAUNCH_EVENTS:
     ensure_pet_logged(f"{character} {name}")

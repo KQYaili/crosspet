@@ -70,7 +70,16 @@ namespace CrossPet
             menu.Items.Add(layer);
             menu.Items.Add(Item("设置…", () => OpenSettings()));
             menu.Items.Add(Item("反馈问题…", OpenFeedback));
-            if (developer) menu.Items.Add(Item("开发者控制台…", OpenDev));
+            if (developer)
+            {
+                menu.Items.Add(Item("开发者控制台…", OpenDev));
+                menu.Items.Add(Item("测试渲染失败并重启…", () =>
+                {
+                    if (MessageBox.Show("这会主动触发渲染失败的恢复流程，桌宠及设置窗口会关闭，然后尝试自动重开。是否继续？",
+                        "CrossPet 开发测试", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+                        Program.InjectRenderFailure();
+                }));
+            }
             menu.Items.Add(Item("回到右下角", Recenter));
             menu.Items.Add(Item(HotkeyLabel != null ? $"暂时隐藏（{HotkeyLabel}）" : "暂时隐藏", () => SetUserHidden(true)));
             Sep();

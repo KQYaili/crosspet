@@ -187,6 +187,12 @@ extension App {
         if fm.fileExists(atPath: res.appendingPathComponent("web").path) { replace("web", in: root, from: res) }
         if fm.fileExists(atPath: res.appendingPathComponent("crosspet-hook.py").path) { replace("crosspet-hook.py", in: root, from: res) }
         // 已经接入过的才更新，没接入的不碰
+        let cursorBridge = "crosspet-cursor-bridge.py"
+        let cursorSrc = res.appendingPathComponent("integrations/cursor")
+        if fm.fileExists(atPath: root.appendingPathComponent(cursorBridge).path),
+           fm.fileExists(atPath: cursorSrc.appendingPathComponent(cursorBridge).path) {
+            replace(cursorBridge, in: root, from: cursorSrc)
+        }
         let mods = fm.homeDirectoryForCurrentUser.appendingPathComponent(".claude/mods/crosspet")
         let modSrc = res.appendingPathComponent("integrations/claude-code/mod")
         if fm.fileExists(atPath: mods.path), fm.fileExists(atPath: modSrc.path) {
@@ -196,12 +202,6 @@ extension App {
         let dshSrc = res.appendingPathComponent("integrations/deepseek/dsh-plugin-crosspet")
         if fm.fileExists(atPath: dsh.path), fm.fileExists(atPath: dshSrc.path) {
             try? fm.removeItem(at: dsh); try? fm.copyItem(at: dshSrc, to: dsh)
-        }
-        // Cursor 的桥接脚本：接入时才放进运行目录，放过的跟着 App 更新
-        let bridge = root.appendingPathComponent("crosspet-cursor-bridge.py")
-        let bridgeSrc = res.appendingPathComponent("integrations/cursor/crosspet-cursor-bridge.py")
-        if fm.fileExists(atPath: bridge.path), fm.fileExists(atPath: bridgeSrc.path) {
-            try? fm.removeItem(at: bridge); try? fm.copyItem(at: bridgeSrc, to: bridge)
         }
         let bundled = res.appendingPathComponent("characters")
         for dir in (try? fm.contentsOfDirectory(atPath: bundled.path)) ?? [] {
@@ -233,7 +233,7 @@ extension App {
         if let side = defaults.string(forKey: "dock"), edgeDockEnabled {   // 上次是贴着边的
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.setDock(side) }
         }
-        js("setAuraMode(\(quote(auraMode))); setShowName(\(showName)); setEggsEnabled(\(eggsEnabled)); setPowerSave(\(powerSave)); setQuotaAggregate(\(quotaAggregate)); setCodexResets(\(codexResets))")
+        js("setAuraMode(\(quote(auraMode))); setShowName(\(showName)); setEggsEnabled(\(eggsEnabled)); setPowerSave(\(powerSave)); setQuotaAggregate(\(quotaAggregate)); setCodexResets(\(codexResets)); setPeakStyle(\(quote(peakStyle))); setPeakSkins(\(peakSkinsJSON))")
         applySizes(anchor: .corner)   // 解锁过文字大小的：按画布重设窗口，左下角不动（锁着的尺寸不变）
         updatePageHidden()
         stamps = [:]
