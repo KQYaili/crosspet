@@ -114,7 +114,7 @@ namespace CrossPet
                     }
                     else Js($"setQuota({Q(id)}, {json})");
                 }
-            if (latestActive.id != null && latestActive.id != current && Store.Flag("followEvents")) SwitchTo(latestActive.id);
+            if (latestActive.id != null && latestActive.id != current && Store.Flag("followEvents")) _ = FollowEvent(latestActive.id);
             ApplyLayer();
             UpdateDock();
         }
