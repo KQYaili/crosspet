@@ -107,7 +107,6 @@ static class Program
         Check("修复包：挑版本最新的完整安装包（不完整的跳过）", InstallCheck.RepairPackage(cache) == newPkg);
         try { Directory.Delete(icRoot, true); } catch { }
 
-        Console.WriteLine(fails == 0 ? "全部通过" : $"{fails} 项失败");
         // 「跟着 AI」取消置顶时插到谁下面（1.3.7 用户反馈：右键几次 / 换角色后她不见了——前台是桌面时被插到了壁纸下面）
         Check("层级：前台是普通程序，插到它下面", ZOrderRule.TuckBelow("Chrome_WidgetWin_1", false));
         Check("层级：前台是桌面（Progman），不插", !ZOrderRule.TuckBelow("Progman", false));
@@ -115,6 +114,25 @@ static class Program
         Check("层级：前台是任务栏，不插", !ZOrderRule.TuckBelow("Shell_TrayWnd", false) && !ZOrderRule.TuckBelow("Shell_SecondaryTrayWnd", false));
         Check("层级：前台是 CrossPet 自己（右键菜单、设置窗口），不插", !ZOrderRule.TuckBelow("WindowsForms10.Window.808.app.0.1", true));
         Check("层级：取不到类名，不插", !ZOrderRule.TuckBelow("", false) && !ZOrderRule.TuckBelow(null, false));
+        var rn = new DateTime(2026, 10, 21, 4, 0, 0, DateTimeKind.Utc);
+        var r1 = new RenderRestartState(0, rn).Next(rn);
+        Check("渲染恢复：首次失败允许第 1 次重启", r1?.Attempts == 1);
+        var r2 = r1.Next(rn.AddSeconds(10));
+        Check("渲染恢复：十秒后又失败允许第 2 次，不留冻住实例", r2?.Attempts == 2);
+        var r3 = r2?.Next(rn.AddSeconds(20));
+        Check("渲染恢复：第三次连续失败仍允许重启", r3?.Attempts == 3);
+        Check("渲染恢复：第 4 次失败停止自动重启", r3 != null && r3.Next(rn.AddSeconds(30)) == null);
+        var capped = new RenderRestartState(3, rn);
+        Check("渲染恢复：十分钟内预算仍耗尽", capped.Next(rn.AddMinutes(10).AddTicks(-1)) == null);
+        Check("渲染恢复：十分钟边界允许新一轮", capped.Next(rn.AddMinutes(10))?.Attempts == 1);
+        Check("渲染恢复：时钟倒退不绕过预算", capped.Next(rn.AddSeconds(-1)) == null);
+        Check("渲染恢复：旧时间戳文件迁移为一次失败", RenderRestartState.Parse("2026-10-21T12:00:00", rn).Next(rn.AddSeconds(5))?.Attempts == 2);
+        Check("渲染恢复：新版记录往返保持 UTC 和次数", RenderRestartState.Parse(capped.Serialize(), rn.AddDays(1)).Serialize() == capped.Serialize());
+        Check("渲染恢复：损坏记录按一次失败接续", RenderRestartState.Parse("bad", rn).Next(rn)?.Attempts == 2);
+        Check("渲染恢复：无历史次数时不继承失败预算", new RenderRestartState(0, rn).Next(rn.AddMinutes(2))?.Attempts == 1);
+        Check("缩放：#28 的 200% 下 195×271 是 0.75 倍，不冒充重复 DPI 的 0.5 倍", ZoomCheck.Off(260, 362, 195, 271, 195, 271)
+            && ZoomCheck.Fix(260, 362, 195, 271, 2, 1) == null);
+        Console.WriteLine(fails == 0 ? "全部通过" : $"{fails} 项失败");
         return fails == 0 ? 0 : 1;
     }
 
