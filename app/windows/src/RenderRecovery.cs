@@ -38,7 +38,7 @@ namespace CrossPet
             healthyTimer.Tick += (_, __) =>
             {
                 healthyTimer.Stop();
-                if (Volatile.Read(ref restarting) != 0) return;
+                if (Volatile.Read(ref restarting) != 0 || !File.Exists(Mark)) return;   // 没出过故障就不写这行（不然每次启动都记一条，排查时误导人）
                 try { File.Delete(Mark); Store.Log("渲染恢复确认：网页已稳定运行 2 分钟，重试计数清零"); }
                 catch (Exception e) { Store.Log("清除渲染恢复记录失败: " + e.Message); }
             };
