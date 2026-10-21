@@ -108,6 +108,13 @@ static class Program
         try { Directory.Delete(icRoot, true); } catch { }
 
         Console.WriteLine(fails == 0 ? "全部通过" : $"{fails} 项失败");
+        // 「跟着 AI」取消置顶时插到谁下面（1.3.7 用户反馈：右键几次 / 换角色后她不见了——前台是桌面时被插到了壁纸下面）
+        Check("层级：前台是普通程序，插到它下面", ZOrderRule.TuckBelow("Chrome_WidgetWin_1", false));
+        Check("层级：前台是桌面（Progman），不插", !ZOrderRule.TuckBelow("Progman", false));
+        Check("层级：前台是桌面（WorkerW），不插", !ZOrderRule.TuckBelow("WorkerW", false));
+        Check("层级：前台是任务栏，不插", !ZOrderRule.TuckBelow("Shell_TrayWnd", false) && !ZOrderRule.TuckBelow("Shell_SecondaryTrayWnd", false));
+        Check("层级：前台是 CrossPet 自己（右键菜单、设置窗口），不插", !ZOrderRule.TuckBelow("WindowsForms10.Window.808.app.0.1", true));
+        Check("层级：取不到类名，不插", !ZOrderRule.TuckBelow("", false) && !ZOrderRule.TuckBelow(null, false));
         return fails == 0 ? 0 : 1;
     }
 

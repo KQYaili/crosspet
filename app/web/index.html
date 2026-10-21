@@ -268,6 +268,8 @@ function framesFor(p) {
 }
 
 // ---- 画面 ----
+// 没有眨眼图时去掉地址：设成空字符串，浏览器会拿网页自己的地址去当图片加载，日志里多一条误导人的「立绘加载失败: …/index.html」
+function setBlinkSrc(u) { if (u) $('blink').src = u; else $('blink').removeAttribute('src') }
 // 两张图轮流交叉淡入：新图加载好之后再盖上来，旧图淡出，不会出现空白。
 // 每次换图都清掉旧的 onload，回调里再核对一次身份，避免过期回调把两张图的前后顺序搅乱。
 const imgA = $('a'), imgB = $('b')
@@ -712,7 +714,7 @@ function setCharacter(id, quiet) {
     charId = id; pose = null; currentUrl = ''
     const c = char()
     applyLook(c)
-    $('blink').src = c.blink || ''
+    setBlinkSrc(c.blink)
     $('caption').textContent = c.name
     const s = charState[id]
     const busy = s && Date.now() / 1000 - s.ts < 60 && !TRANSIENT[s.pose] && s.pose !== 'idle'
@@ -1598,7 +1600,7 @@ function quitEggNow() {
   charId = host; pose = null; currentUrl = ''
   const c = char()
   applyLook(c)
-  $('blink').src = c.blink || ''
+  setBlinkSrc(c.blink)
   $('caption').textContent = c.name
   say('')
   renderQuota()
@@ -1612,7 +1614,7 @@ function endEgg() {
     charId = host; pose = null; currentUrl = ''
     const c = char()
     applyLook(c)
-    $('blink').src = c.blink || ''
+    setBlinkSrc(c.blink)
     $('caption').textContent = c.name
     setPose(restPose(), true); say('')
     renderQuota()
