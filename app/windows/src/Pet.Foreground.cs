@@ -28,6 +28,7 @@ namespace CrossPet
             var map = Store.ReadJson(Store.AppMap);
             var match = exe == "" ? null : map?.FirstOrDefault(kv => string.Equals(kv.Key, exe, StringComparison.OrdinalIgnoreCase)).Value as string;
             frontIsAI = !string.IsNullOrWhiteSpace(match);
+            frontIsShell = Native.ForegroundIsShell();
             ApplyLayer();
             if (!ready || Paused || !Store.Flag("followApps") || exe == "") return;
             if (string.IsNullOrWhiteSpace(match)) return;   // 对照表里没有，或者值留空：这个程序不跟随

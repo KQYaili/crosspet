@@ -114,6 +114,12 @@ static class Program
         Check("层级：前台是任务栏，不插", !ZOrderRule.TuckBelow("Shell_TrayWnd", false) && !ZOrderRule.TuckBelow("Shell_SecondaryTrayWnd", false));
         Check("层级：前台是 CrossPet 自己（右键菜单、设置窗口），不插", !ZOrderRule.TuckBelow("WindowsForms10.Window.808.app.0.1", true));
         Check("层级：取不到类名，不插", !ZOrderRule.TuckBelow("", false) && !ZOrderRule.TuckBelow(null, false));
+        // 「跟着 AI」时要不要置顶（loki 实测：开 Chrome 再按 Win+D，桌面把不置顶的她一起盖住了，一直不出来）
+        Check("置顶：始终在最上层", ZOrderRule.Top("always", false, false));
+        Check("置顶：普通窗口模式从不置顶", !ZOrderRule.Top("normal", true, true));
+        Check("置顶：跟着 AI，AI 在前台或刚干完活", ZOrderRule.Top("ai", true, false));
+        Check("置顶：跟着 AI，普通程序在前台时不置顶（不挡你）", !ZOrderRule.Top("ai", false, false));
+        Check("置顶：跟着 AI，前台是桌面 / 任务栏时置顶（没在用程序，挡不着谁）", ZOrderRule.Top("ai", false, true));
         var rn = new DateTime(2026, 10, 21, 4, 0, 0, DateTimeKind.Utc);
         var r1 = new RenderRestartState(0, rn).Next(rn);
         Check("渲染恢复：首次失败允许第 1 次重启", r1?.Attempts == 1);

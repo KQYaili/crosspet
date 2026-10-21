@@ -114,6 +114,16 @@ namespace CrossPet
         public static void MoveTo(IntPtr hwnd, int x, int y) =>
             SetWindowPos(hwnd, IntPtr.Zero, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 
+        /// <summary>前台是不是桌面或任务栏（Win+D、点了桌面空白处）</summary>
+        public static bool ForegroundIsShell()
+        {
+            var front = GetForegroundWindow();
+            if (front == IntPtr.Zero) return false;
+            var root = GetAncestor(front, 2); if (root != IntPtr.Zero) front = root;   // GA_ROOT
+            var cls = new StringBuilder(64); GetClassName(front, cls, 64);
+            return ZOrderRule.IsShell(cls.ToString());
+        }
+
         /// <summary>前台窗口所属程序的文件名（小写，如 codex.exe）；取不到返回空串。只看程序名，不读窗口标题和内容</summary>
         public static string ForegroundExe()
         {

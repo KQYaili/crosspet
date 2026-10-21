@@ -59,6 +59,9 @@ namespace CrossPet
         void Poll()
         {
             if (!ready) return;
+            // 前台换成 / 离开桌面：Win+D「显示桌面」不一定发前台切换事件，这里兜一下（见 ZOrderRule.Top）
+            var shell = Native.ForegroundIsShell();
+            if (shell != frontIsShell) { frontIsShell = shell; ApplyLayer(); }
             // 多模型宿主（DeepSeek Harness、WorkBuddy、ZCode，以及接了别家接口的 Claude Code、Codex）里换了模型：
             // 它正在前台的话马上换成那个模型的角色
             var hostChanged = false;
